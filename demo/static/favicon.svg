@@ -1,0 +1,21 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100">
+  <!-- Background circle -->
+  <circle cx="50" cy="50" r="50" fill="#0055D4"/>
+
+  <!-- Chain link (representing agent-to-agent trust) -->
+  <g stroke="#FFFFFF" stroke-width="3" fill="none">
+    <!-- First link -->
+    <path d="M 25 50 Q 25 35 35 35 Q 45 35 45 50 Q 45 65 35 65 Q 25 65 25 50" stroke-linecap="round"/>
+
+    <!-- Second link -->
+    <path d="M 55 50 Q 55 35 65 35 Q 75 35 75 50 Q 75 65 65 65 Q 55 65 55 50" stroke-linecap="round"/>
+
+    <!-- Connection line -->
+    <line x1="45" y1="50" x2="55" y2="50" stroke-linecap="round"/>
+  </g>
+
+  <!-- Checkmark in center (trust/validation) -->
+  <g stroke="#FFFFFF" stroke-width="2.5" fill="none" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M 48 55 L 52 59 L 58 45"/>
+  </g>
+</svg>
