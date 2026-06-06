@@ -8,6 +8,7 @@ from pathlib import Path
 from cert_validator import CertValidator
 from replay_prevention import ReplayPrevention
 from audit_chain import AuditChain
+from policy_validator import PolicyValidator
 
 log = logging.getLogger(__name__)
 
@@ -30,6 +31,7 @@ class EventService:
         self.cert_validator = cert_validator or CertValidator()
         self.replay_prevention = replay_prevention or ReplayPrevention()
         self.audit_chain = audit_chain or AuditChain()
+        self.policy_validator = PolicyValidator()
         import os
         self.certs_dir = Path(os.getenv("CERTS_DIR", "./certs"))
 
@@ -38,7 +40,9 @@ class EventService:
                    request_timestamp: Optional[str] = None) -> tuple:
         """
         Write event with IETF A2A Trust compliance checks.
-        Validation chain: cert → replay → CRL → scopes → scopes subset → S3 → audit chain
+        Validation chain (per IETF draft-tonyai-a2a-trust-00):
+        0. agent_id format → 1. cert validation (RFC 5280) → 1.5. policy authority dual-sig (Section 9.3)
+        → 2. replay prevention (Section 16.2) → 3. CRL check → 4. scopes → 5. scopes subset → 6. S3 write → 7. audit chain
         Returns: (success: bool, s3_key: str, decision: str, reason: str)
         """
         # TODO: Update to UUID7 for sortable IDs
@@ -74,6 +78,24 @@ class EventService:
                     "decision": decision,
                     "reason": reason,
                     "stage": "certificate_validation"
+                })
+                return (False, None, decision, reason)
+
+            # 1.5. POLICY AUTHORITY VALIDATION — DUAL-SIGNATURE (Section 9.3)
+            # If this is a policy update, both Owner and PA signatures required
+            policy_valid, policy_reason = self.policy_validator.validate_policy_update(event_data)
+            if not policy_valid:
+                decision = "DENIED"
+                reason = policy_reason
+                log.warning(f"Policy validation failed: {reason}")
+                self._log_audit({
+                    "correlationId": correlation_id,
+                    "spanId": span_id,
+                    "agent": agent_id,
+                    "action": "write_event",
+                    "decision": decision,
+                    "reason": reason,
+                    "stage": "policy_authority_validation"
                 })
                 return (False, None, decision, reason)
 
