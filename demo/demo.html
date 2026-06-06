@@ -12,41 +12,85 @@
         <h1>A2A Trust PoC - Live Demo</h1>
         <h2>11 Scenarios: Golden Path + Dynamic Policy + 9 Attack/Edge Cases</h2>
 
+        <section id="cert-panel">
+            <h3>Agent Certificate Bounds</h3>
+            <div class="cert-grid">
+                <div class="cert-card">
+                    <div class="cert-title">agent-a <span class="cert-state active">ACTIVE</span></div>
+                    <div class="cert-row"><span class="cert-label">Allowed Scopes</span><span class="cert-value scope">read:events</span></div>
+                    <div class="cert-row"><span class="cert-label">Can Spawn</span><span class="cert-value none">none</span></div>
+                    <div class="cert-row"><span class="cert-label">Max Children</span><span class="cert-value">0</span></div>
+                    <div class="cert-row"><span class="cert-label">Policy Reference</span><span class="cert-value policy">policy-store/agent-a/current</span></div>
+                    <div class="cert-row"><span class="cert-label">Time-to-Live</span><span class="cert-value">86400s (24hr)</span></div>
+                </div>
+                <div class="cert-card">
+                    <div class="cert-title">agent-b <span class="cert-state active">ACTIVE</span></div>
+                    <div class="cert-row"><span class="cert-label">Allowed Scopes</span><span class="cert-value scope">write:events</span></div>
+                    <div class="cert-row"><span class="cert-label">Can Spawn</span><span class="cert-value spawn">agent-a</span></div>
+                    <div class="cert-row"><span class="cert-label">Max Children</span><span class="cert-value">5</span></div>
+                    <div class="cert-row"><span class="cert-label">Policy Reference</span><span class="cert-value policy">policy-store/agent-b/current</span></div>
+                    <div class="cert-row"><span class="cert-label">Time-to-Live</span><span class="cert-value">86400s (24hr)</span></div>
+                </div>
+            </div>
+        </section>
+
         <section id="controls">
             <h3>Scenario Buttons</h3>
             <div class="button-grid">
                 <button class="scenario-btn allowed" data-scenario="1">
-                    1. Golden Path<br><small>E2E task completion</small>
+                    <span class="sc-title">1. Golden Path</span>
+                    <span class="sc-cert">agent-b · write:events</span>
+                    <span class="sc-cert">can spawn agent-a ✓</span>
                 </button>
                 <button class="scenario-btn allowed" data-scenario="2">
-                    2. Dynamic Policy<br><small>Update enforcement</small>
+                    <span class="sc-title">2. Dynamic Policy</span>
+                    <span class="sc-cert">Owner + PA both sign</span>
+                    <span class="sc-cert">policy update allowed ✓</span>
                 </button>
                 <button class="scenario-btn denied" data-scenario="3">
-                    3. Rogue Spawn<br><small>Not in CanSpawn</small>
+                    <span class="sc-title">3. Rogue Spawn</span>
+                    <span class="sc-cert">agent-a · can spawn: none</span>
+                    <span class="sc-cert">spawn attempt blocked ✗</span>
                 </button>
                 <button class="scenario-btn denied" data-scenario="4">
-                    4. Dual-Sig Missing<br><small>Owner sig only</small>
+                    <span class="sc-title">4. Missing Signature</span>
+                    <span class="sc-cert">Policy Authority sig absent</span>
+                    <span class="sc-cert">single sig not enough ✗</span>
                 </button>
                 <button class="scenario-btn denied" data-scenario="5">
-                    5. Dual-Sig Tampered<br><small>PA sig invalid</small>
+                    <span class="sc-title">5. Tampered Signature</span>
+                    <span class="sc-cert">Policy Authority sig corrupted</span>
+                    <span class="sc-cert">crypto check fails ✗</span>
                 </button>
                 <button class="scenario-btn denied" data-scenario="6">
-                    6. Scope Escalation<br><small>Child > parent</small>
+                    <span class="sc-title">6. Scope Escalation</span>
+                    <span class="sc-cert">agent-b · allowed: write:events</span>
+                    <span class="sc-cert">requests admin:all — blocked ✗</span>
                 </button>
                 <button class="scenario-btn denied" data-scenario="7">
-                    7. Revocation Lifecycle<br><small>ACTIVE→DISABLED→DELETED</small>
+                    <span class="sc-title">7. Cert Lifecycle</span>
+                    <span class="sc-cert">ACTIVE → DISABLED → DELETED</span>
+                    <span class="sc-cert">revocation list updated ✗</span>
                 </button>
                 <button class="scenario-btn denied" data-scenario="8">
-                    8. CRL Check Failure<br><small>Revoked cert mid-chain</small>
+                    <span class="sc-title">8. Revoked Cert</span>
+                    <span class="sc-cert">cert on revocation list</span>
+                    <span class="sc-cert">chain validation fails ✗</span>
                 </button>
                 <button class="scenario-btn denied" data-scenario="9">
-                    9. TTL Expiry<br><small>Expired template</small>
+                    <span class="sc-title">9. Expired Cert</span>
+                    <span class="sc-cert">cert TTL exceeded</span>
+                    <span class="sc-cert">expiry check fails ✗</span>
                 </button>
-                <button class="scenario-btn denied" data-scenario="10">
-                    10. Cross-Org Grant<br><small>Allow then revoke</small>
+                <button class="scenario-btn allowed" data-scenario="10">
+                    <span class="sc-title">10. Cross-Org Grant</span>
+                    <span class="sc-cert">dual-signed · time-limited grant</span>
+                    <span class="sc-cert">grant issued — write allowed ✓</span>
                 </button>
                 <button class="scenario-btn denied" data-scenario="11">
-                    11. Replay Attack<br><small>Reused nonce</small>
+                    <span class="sc-title">11. Replay Attack</span>
+                    <span class="sc-cert">same nonce sent twice</span>
+                    <span class="sc-cert">2nd request blocked ✗</span>
                 </button>
             </div>
         </section>

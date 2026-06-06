@@ -51,6 +51,58 @@ section {
     margin-bottom: 40px;
 }
 
+/* Cert Panel */
+.cert-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 16px;
+    margin-top: 12px;
+}
+
+.cert-card {
+    background: #0d1117;
+    border: 1px solid #21262d;
+    border-radius: 8px;
+    padding: 14px 16px;
+}
+
+.cert-title {
+    font-weight: 700;
+    font-size: 1em;
+    color: #c8dce8;
+    margin-bottom: 10px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.cert-state {
+    font-size: 0.7em;
+    padding: 2px 7px;
+    border-radius: 10px;
+    font-weight: 600;
+}
+
+.cert-state.active { background: #1a4731; color: #3fb950; border: 1px solid #3fb950; }
+
+.cert-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    font-size: 0.8em;
+    padding: 3px 0;
+    border-bottom: 1px solid #21262d;
+}
+
+.cert-row:last-child { border-bottom: none; }
+
+.cert-label { color: #8b949e; font-weight: 500; min-width: 90px; }
+.cert-value { color: #e2e8f0; text-align: right; }
+.cert-value.scope  { color: #58a6ff; }
+.cert-value.spawn  { color: #3fb950; }
+.cert-value.policy { color: #d2a8ff; font-size: 0.85em; }
+.cert-value.none   { color: #6e7681; font-style: italic; }
+
 .button-grid {
     display: grid;
     grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
@@ -79,7 +131,7 @@ section {
 }
 
 .scenario-btn {
-    padding: 12px 8px;
+    padding: 10px 8px;
     border: 1px solid #21262d;
     border-radius: 8px;
     font-size: 0.85em;
@@ -88,11 +140,37 @@ section {
     transition: all 0.3s ease;
     color: #e2e8f0;
     background: #0d1117;
-    min-height: 80px;
+    min-height: 100px;
     display: flex;
     flex-direction: column;
-    justify-content: center;
-    align-items: center;
+    justify-content: flex-start;
+    align-items: flex-start;
+    text-align: left;
+    gap: 2px;
+}
+
+.sc-title {
+    font-size: 0.95em;
+    font-weight: 700;
+    -webkit-text-fill-color: inherit;
+    width: 100%;
+}
+
+.sc-sub {
+    font-size: 0.78em;
+    opacity: 0.75;
+    -webkit-text-fill-color: inherit;
+    width: 100%;
+}
+
+.sc-cert {
+    font-size: 0.7em;
+    color: #8b949e;
+    -webkit-text-fill-color: #8b949e;
+    font-weight: 400;
+    font-family: monospace;
+    width: 100%;
+    margin-top: 1px;
 }
 
 .scenario-btn.allowed {
