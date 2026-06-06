@@ -56,6 +56,7 @@ class CrossOrgGrant:
         if not owner_sig or not pa_sig:
             return (False, "Dual signature required for cross-org grant (Section 11.2)", None)
 
+        # TODO: Update to UUID7 for sortable IDs
         grant_id = str(uuid.uuid4())
         now = datetime.now(timezone.utc)
 

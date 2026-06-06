@@ -41,6 +41,7 @@ class EventService:
         Validation chain: cert → replay → CRL → scopes → scopes subset → S3 → audit chain
         Returns: (success: bool, s3_key: str, decision: str, reason: str)
         """
+        # TODO: Update to UUID7 for sortable IDs
         span_id = str(uuid.uuid4())
         decision = "ALLOWED"
         reason = "Full chain validates"
@@ -297,6 +298,7 @@ class EventService:
         Validation chain: cert → replay → CRL → scopes → S3 → audit chain
         Returns: (success: bool, content: str, decision: str, reason: str)
         """
+        # TODO: Update to UUID7 for sortable IDs
         span_id = str(uuid.uuid4())
         decision = "ALLOWED"
         reason = "Full chain validates"

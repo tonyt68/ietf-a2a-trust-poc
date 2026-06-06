@@ -8,3 +8,4 @@ google-cloud-logging==3.8.0
 requests==2.31.0
 pytest==7.4.3
 anthropic==0.44.0
+uuid7==0.1.0

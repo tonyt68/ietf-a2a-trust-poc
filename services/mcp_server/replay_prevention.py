@@ -71,7 +71,8 @@ class ReplayPrevention:
             log.error("Nonce cleanup error", extra={"error": str(e)})
 
     def generate_nonce(self) -> str:
-        """Generate UUID v4 nonce for client to include in request"""
+        """Generate UUID v7 nonce for client to include in request"""
+        # TODO: Update to UUID7 for sortable IDs
         return str(uuid.uuid4())
 
     def validate_request(self, request_nonce: str, request_timestamp: str) -> Tuple[bool, str]:

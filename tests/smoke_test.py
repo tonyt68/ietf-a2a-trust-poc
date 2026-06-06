@@ -279,11 +279,11 @@ print(f"\n{YELLOW}── 8. End-to-End Smoke (write-event) ───────
 if mcp_up:
     try:
         payload = {
-            "correlation_id":    str(uuid.uuid4()),
+            "correlation_id":    str(uuid.uuid4()),  # TODO: Update to UUID7
             "agent_id":          "agent-b",
             "requested_scopes":  ["write:events"],
             "event_data":        {"smoke_test": True, "ts": datetime.now(timezone.utc).isoformat()},
-            "request_nonce":     str(uuid.uuid4()),
+            "request_nonce":     str(uuid.uuid4()),  # TODO: Update to UUID7
             "request_timestamp": datetime.now(timezone.utc).isoformat(),
         }
         r = requests.post(f"{MCP_URL}/write-event", json=payload, timeout=10)
@@ -300,11 +300,11 @@ if mcp_up:
     # Verify a bad agent is correctly denied
     try:
         payload_bad = {
-            "correlation_id":    str(uuid.uuid4()),
+            "correlation_id":    str(uuid.uuid4()),  # TODO: Update to UUID7
             "agent_id":          "agent-a",
             "requested_scopes":  ["write:events"],  # agent-a only has read:events
             "event_data":        {"smoke_test": True},
-            "request_nonce":     str(uuid.uuid4()),
+            "request_nonce":     str(uuid.uuid4()),  # TODO: Update to UUID7
             "request_timestamp": datetime.now(timezone.utc).isoformat(),
         }
         r2 = requests.post(f"{MCP_URL}/write-event", json=payload_bad, timeout=10)

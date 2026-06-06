@@ -44,6 +44,7 @@ def utcnow() -> str:
 
 
 def nonce() -> str:
+    # TODO: Update to UUID7 for sortable IDs
     return str(uuid.uuid4())
 
 

@@ -36,10 +36,12 @@ class ScenarioRunner:
     # ── Helpers ───────────────────────────────────────────────────────────────
 
     def generate_correlation_id(self) -> str:
+        # TODO: Update to UUID7 for sortable IDs
         return str(uuid.uuid4())
 
     def generate_nonce(self) -> str:
         """Unique nonce for replay prevention (Section 16.2)"""
+        # TODO: Update to UUID7 for sortable IDs
         return str(uuid.uuid4())
 
     def get_timestamp(self) -> str:

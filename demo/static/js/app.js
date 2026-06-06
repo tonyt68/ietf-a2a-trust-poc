@@ -16,13 +16,6 @@ const SCENARIOS = {
     11: { name: 'Replay Attack', decision: 'DENIED', reason: 'Reused nonce', requestedScopes: ['write:events'] }
 };
 
-function generateUUID() {
-    return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, function(c) {
-        const r = Math.random() * 16 | 0, v = c === 'x' ? r : (r & 0x3 | 0x8);
-        return v.toString(16);
-    });
-}
-
 document.addEventListener('DOMContentLoaded', function() {
     attachScenarioListeners();
 });
@@ -48,18 +41,21 @@ async function computeHash(data) {
 async function runScenario(scenarioId) {
     const scenario = SCENARIOS[scenarioId];
     const agentId = scenarioId % 2 === 0 ? 'agent-b' : 'agent-a';
-    const correlationId = generateUUID();
-    const spanId = generateUUID();
     const parentSpanId = auditLog.length > 0 ? auditLog[auditLog.length - 1].spanId : null;
 
     try {
+        // Server generates correlationId — client never creates or modifies it
         const response = await fetch(`${API_URL}/scenario/run`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ id: scenarioId, correlationId: correlationId })
+            body: JSON.stringify({ id: scenarioId })
         });
 
         const result = await response.json();
+        const correlationId = result.correlationId;  // Receive from server
+        if (!correlationId) {
+            throw new Error('Server response missing correlationId');
+        }
 
         // Compute previous entry hash
         let prevEntryHash = 'root';
@@ -67,10 +63,10 @@ async function runScenario(scenarioId) {
             prevEntryHash = await computeHash(auditLog[auditLog.length - 1]);
         }
 
-        // Add to audit log
+        // Add to audit log with server-generated correlationId
         const auditEntry = {
             correlationId: correlationId,
-            spanId: spanId,
+            spanId: correlationId,  // Use correlationId as spanId (UUID7, sortable)
             parentSpanId: parentSpanId,
             scenario: scenarioId,
             name: scenario.name,
@@ -102,7 +98,7 @@ function updateAuditTable() {
     const tbody = document.getElementById('audit-body');
     tbody.innerHTML = '';
 
-    auditLog.forEach(entry => {
+    auditLog.slice().reverse().forEach(entry => {
         const row = document.createElement('tr');
         row.className = entry.decision === 'ALLOWED' ? 'allowed' : 'denied';
 

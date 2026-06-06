@@ -4,6 +4,7 @@ from fastapi import FastAPI
 from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
 import json
+import uuid
 from scenario_runner import ScenarioRunner
 
 logging.basicConfig(level=os.getenv('LOG_LEVEL', 'INFO'))
@@ -70,7 +71,9 @@ async def run_scenario(scenario: dict):
     """Run a demo scenario with real Claude calls"""
     try:
         scenario_id = scenario.get("id")
-        correlation_id = scenario.get("correlationId")
+        # Server ALWAYS generates correlationId — client cannot override
+        # TODO: Update to UUID7 for sortable IDs
+        correlation_id = str(uuid.uuid4())
         log.info(f"Running scenario {scenario_id} with real Claude (correlationId={correlation_id})")
 
         # Get and run scenario handler
