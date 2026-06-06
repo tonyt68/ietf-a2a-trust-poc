@@ -58,6 +58,26 @@ section {
     margin-bottom: 20px;
 }
 
+#load-audit-btn {
+    font-size: 0.8em;
+    padding: 5px 12px;
+    cursor: pointer;
+    background: #1f6feb;
+    color: #ffffff;
+    -webkit-text-fill-color: #ffffff;
+    background-clip: unset;
+    -webkit-background-clip: unset;
+    border: 1px solid #388bfd;
+    border-radius: 4px;
+    font-weight: 600;
+    vertical-align: middle;
+}
+
+#load-audit-btn:hover {
+    background: #388bfd;
+    -webkit-text-fill-color: #ffffff;
+}
+
 .scenario-btn {
     padding: 12px 8px;
     border: 1px solid #21262d;

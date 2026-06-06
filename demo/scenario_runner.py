@@ -147,16 +147,17 @@ class ScenarioRunner:
         claude_response = "Hardcoded response (Claude auth disabled)"  # Skip Claude call
 
         policy_doc = {
-            "name":       "policy-agent-b-v2",
-            "agent":      "agent-b",
-            "scopes":     ["write:events"],
+            "allowed_scopes": ["write:events"],
+            "can_spawn": [],
+            "ttl_seconds": 86400,
+            "owner": "agent-b",
             "created_at": self.get_timestamp(),
-            "rationale":  claude_response,
+            "description": f"Policy update: {claude_response}",
         }
         owner_sig, pa_sig = self.create_dual_sig(policy_doc)
 
         r = self._post(agent_id, ["write:events"],
-                       {"policy_update": policy_doc, "owner_sig": owner_sig, "pa_sig": pa_sig})
+                       {"policy_update": True, "policy_doc": policy_doc, "owner_sig": owner_sig, "pa_sig": pa_sig})
         decision = "ALLOWED" if r.status_code == 200 else "DENIED"
         self.log_to_audit(2, agent_id, "policy_update", decision,
                           "Dual-sig policy update (Owner + PA, Section 9.3)")

@@ -5,6 +5,7 @@ from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
 import json
 import uuid
+import boto3
 from scenario_runner import ScenarioRunner
 
 logging.basicConfig(level=os.getenv('LOG_LEVEL', 'INFO'))
@@ -104,6 +105,46 @@ async def run_scenario(scenario: dict):
     except Exception as e:
         log.error(f"Scenario error: {e}")
         return {"status": "error", "message": str(e)}
+
+
+@app.get("/api/audit/recent")
+async def get_recent_audit():
+    """Fetch last 10 audit entries from CloudWatch Logs (last 1 hour)."""
+    try:
+        cw = boto3.client(
+            "logs",
+            region_name=os.getenv("AWS_REGION", "us-east-1"),
+            aws_access_key_id=os.getenv("AWS_ACCESS_KEY_ID"),
+            aws_secret_access_key=os.getenv("AWS_SECRET_ACCESS_KEY"),
+        )
+        log_group = os.getenv("CLOUDWATCH_LOG_GROUP", "/a2a-trust-poc/audit")
+
+        resp = cw.start_query(
+            logGroupName=log_group,
+            startTime=int(__import__("time").time()) - 3600,  # last 1 hour
+            endTime=int(__import__("time").time()),
+            queryString="fields @timestamp, correlationId, agent, action, decision, reason, stage | sort @timestamp desc | limit 10",
+        )
+        query_id = resp["queryId"]
+
+        # Poll until complete (max 10s)
+        import time
+        for _ in range(20):
+            time.sleep(0.5)
+            result = cw.get_query_results(queryId=query_id)
+            if result["status"] in ("Complete", "Failed", "Cancelled"):
+                break
+
+        entries = []
+        for row in result.get("results", []):
+            entry = {r["field"]: r["value"] for r in row}
+            entries.append(entry)
+
+        return {"status": "success", "entries": entries, "count": len(entries)}
+
+    except Exception as e:
+        log.error(f"CloudWatch audit fetch failed: {e}")
+        return {"status": "error", "message": str(e), "entries": []}
 
 
 if __name__ == "__main__":

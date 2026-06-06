@@ -86,6 +86,8 @@ async function runScenario(scenarioId) {
         };
 
         auditLog.push(auditEntry);
+        // Drop oldest row when count exceeds 10
+        if (auditLog.length > 10) auditLog.shift();
         updateAuditTable();
         updateHashChain();
 
@@ -102,7 +104,7 @@ function updateAuditTable() {
         const row = document.createElement('tr');
         row.className = entry.decision === 'ALLOWED' ? 'allowed' : 'denied';
 
-        const cwLink = `https://console.aws.amazon.com/cloudwatch/home?region=us-east-1#logsV2:logs-insights$3FqueryDetail$3D~(end~0~start~-10800~timeType~'RELATIVE~unit~'seconds~editorString~'fields*20*40timestamp*2c*20correlationId*2c*20decision*0a*7c*20filter*20correlationId*20*3d*20*22${entry.correlationId}*22~source~(~'/a2a-trust-poc/audit))`;
+        const cwLink = `https://console.aws.amazon.com/cloudwatch/home?region=us-east-1#logsV2:logs-insights$3FqueryDetail$3D~(end~0~start~-3600~timeType~'RELATIVE~unit~'seconds~editorString~'fields*20*40timestamp*2c*20correlationId*2c*20agent*2c*20decision*2c*20reason*0a*7c*20filter*20correlationId*20*3d*20*22${entry.correlationId}*22*0a*7c*20sort*20*40timestamp*20desc~source~(~'/a2a-trust-poc/audit))`;
 
         const correlationDisplay = `<code style="font-size: 0.75em; color: #58a6ff;">${entry.correlationId.substring(0, 8)}...</code>
             <a href="${cwLink}" target="_blank" style="display: inline-block; margin-left: 4px; font-size: 0.75em;">📊</a>`;
@@ -214,4 +216,57 @@ function showEntryDetails(entry) {
     modal.addEventListener('click', (e) => {
         if (e.target === modal) modal.remove();
     });
+}
+
+async function loadRecentAudit() {
+    const btn = document.getElementById('load-audit-btn');
+    btn.textContent = '⏳ Loading...';
+    btn.disabled = true;
+
+    try {
+        const resp = await fetch('/api/audit/recent');
+        const data = await resp.json();
+
+        if (data.status !== 'success' || data.entries.length === 0) {
+            btn.textContent = '⚠️ No entries found';
+            setTimeout(() => { btn.textContent = '🔄 Load Last 10 from CloudWatch'; btn.disabled = false; }, 2000);
+            return;
+        }
+
+        // Merge CW entries into auditLog (newest first from CW, oldest first in auditLog)
+        data.entries.slice().reverse().forEach(cw => {
+            try {
+                const msg = JSON.parse(cw['@message'] || '{}');
+                const entry = {
+                    correlationId:  msg.correlationId || cw.correlationId || '—',
+                    spanId:         msg.spanId        || '—',
+                    scenario:       msg.scenario      || '—',
+                    name:           msg.name          || 'CW Entry',
+                    agent:          msg.agent         || cw.agent || '—',
+                    action:         msg.action        || cw.action || '—',
+                    decision:       msg.decision      || cw.decision || '—',
+                    reason:         msg.reason        || cw.reason || '—',
+                    timestamp:      cw['@timestamp']  || msg.timestamp || new Date().toISOString(),
+                    grantedScopes:  msg.grantedScopes || [],
+                    requestedScopes: msg.requestedScopes || [],
+                    prevEntryHash:  msg.prevEntryHash || '—',
+                    certStatus:     msg.certStatus    || '—',
+                    jwtValid:       msg.jwtValid      ?? null,
+                    hmacValid:      msg.hmacValid     ?? null,
+                };
+                auditLog.push(entry);
+                // Drop oldest when over 10
+                if (auditLog.length > 10) auditLog.shift();
+            } catch (_) {}
+        });
+
+        updateAuditTable();
+        updateHashChain();
+        btn.textContent = `✅ Loaded ${data.count} entries`;
+        setTimeout(() => { btn.textContent = '🔄 Load Last 10 from CloudWatch'; btn.disabled = false; }, 2000);
+
+    } catch (e) {
+        btn.textContent = '❌ Error loading';
+        setTimeout(() => { btn.textContent = '🔄 Load Last 10 from CloudWatch'; btn.disabled = false; }, 2000);
+    }
 }

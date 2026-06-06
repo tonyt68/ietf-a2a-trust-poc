@@ -52,7 +52,11 @@
         </section>
 
         <section id="audit-log">
-            <h3>Live Audit Trail</h3>
+            <h3>Live Audit Trail &nbsp;
+                <button id="load-audit-btn" onclick="loadRecentAudit()">
+                    🔄 Load Last 10 from CloudWatch
+                </button>
+            </h3>
             <p><small>Click any row to expand full JSON</small></p>
             <table class="audit-table">
                 <thead>
