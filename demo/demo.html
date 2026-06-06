@@ -1,0 +1,86 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>A2A Trust PoC - Live Demo</title>
+    <link rel="stylesheet" href="static/css/style.css">
+</head>
+<body>
+    <div class="container">
+        <h1>A2A Trust PoC - Live Demo</h1>
+        <h2>11 Scenarios: Golden Path + Dynamic Policy + 9 Attack/Edge Cases</h2>
+
+        <section id="controls">
+            <h3>Scenario Buttons</h3>
+            <div class="button-grid">
+                <button class="scenario-btn allowed" data-scenario="1">
+                    1. Golden Path<br><small>E2E task completion</small>
+                </button>
+                <button class="scenario-btn allowed" data-scenario="2">
+                    2. Dynamic Policy<br><small>Update enforcement</small>
+                </button>
+                <button class="scenario-btn denied" data-scenario="3">
+                    3. Rogue Spawn<br><small>Not in CanSpawn</small>
+                </button>
+                <button class="scenario-btn denied" data-scenario="4">
+                    4. Dual-Sig Missing<br><small>Owner sig only</small>
+                </button>
+                <button class="scenario-btn denied" data-scenario="5">
+                    5. Dual-Sig Tampered<br><small>PA sig invalid</small>
+                </button>
+                <button class="scenario-btn denied" data-scenario="6">
+                    6. Scope Escalation<br><small>Child > parent</small>
+                </button>
+                <button class="scenario-btn denied" data-scenario="7">
+                    7. Revocation Lifecycle<br><small>ACTIVE→DISABLED→DELETED</small>
+                </button>
+                <button class="scenario-btn denied" data-scenario="8">
+                    8. CRL Check Failure<br><small>Revoked cert mid-chain</small>
+                </button>
+                <button class="scenario-btn denied" data-scenario="9">
+                    9. TTL Expiry<br><small>Expired template</small>
+                </button>
+                <button class="scenario-btn denied" data-scenario="10">
+                    10. Cross-Org Grant<br><small>Allow then revoke</small>
+                </button>
+                <button class="scenario-btn denied" data-scenario="11">
+                    11. Replay Attack<br><small>Reused nonce</small>
+                </button>
+            </div>
+        </section>
+
+        <section id="audit-log">
+            <h3>Live Audit Trail</h3>
+            <p><small>Click any row to expand full JSON</small></p>
+            <table class="audit-table">
+                <thead>
+                    <tr>
+                        <th>Scenario</th>
+                        <th>Agent</th>
+                        <th>Action</th>
+                        <th>Decision</th>
+                        <th>Reason</th>
+                        <th>CorrelationId</th>
+                        <th>Timestamp</th>
+                    </tr>
+                </thead>
+                <tbody id="audit-body">
+                    <tr><td colspan="6"><em>Run a scenario to populate audit log</em></td></tr>
+                </tbody>
+            </table>
+        </section>
+
+        <section id="hash-chain">
+            <h3>Hash Chain Integrity</h3>
+            <p id="hash-status"><em>No entries yet</em></p>
+        </section>
+
+        <section id="back">
+            <p><a href="/prep">← Back to Architecture</a></p>
+        </section>
+    </div>
+
+    <script src="static/js/app.js"></script>
+</body>
+</html>

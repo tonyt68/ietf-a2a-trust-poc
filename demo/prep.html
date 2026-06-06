@@ -1,0 +1,103 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>A2A Trust PoC - Architecture & Context</title>
+    <link rel="stylesheet" href="static/css/style.css">
+</head>
+<body>
+    <div class="container">
+        <h1>A2A Trust Enforcement PoC</h1>
+        <h2>Reference Implementation of draft-tonyai-a2a-trust-00</h2>
+
+        <section id="architecture">
+            <h3>Architecture Overview</h3>
+            <p><strong>Goal:</strong> Two Claude agents authenticating to each other before exchanging data.</p>
+            <p><strong>Trust Stack:</strong> mTLS → JWT RS256 → HMAC-SHA256 → Cedar Policy → Hash-Chained Audit Trail</p>
+
+            <pre><code>
+Agent A (Requester)
+    ↓ (mTLS)
+Agent B (Responder)
+    ↓ (JWT validation)
+    ↓ (HMAC verification)
+    ↓ (Cedar policy evaluation)
+    ↓ (fail-closed enforcement)
+MCP Server
+    ↓ (execute S3 operation)
+CloudWatch + GCP Logging
+(federated, independent audit trails)
+            </code></pre>
+        </section>
+
+        <section id="trust-stack">
+            <h3>Trust Stack Explanation</h3>
+            <ul>
+                <li><strong>mTLS:</strong> Mutual TLS between agents (self-signed certs for PoC)</li>
+                <li><strong>JWT RS256:</strong> Agent A presents signed JWT; Agent B validates</li>
+                <li><strong>HMAC-SHA256:</strong> Message integrity check on every payload</li>
+                <li><strong>Cedar Policy:</strong> Scope/spawn authorization (dynamic lane)</li>
+                <li><strong>Audit Trail:</strong> CloudWatch + GCP Logging (federated, independent)</li>
+            </ul>
+        </section>
+
+        <section id="ietf-mapping">
+            <h3>IETF Draft Field Mapping</h3>
+            <table>
+                <tr>
+                    <th>Certificate Field</th>
+                    <th>Description</th>
+                    <th>PoC Implementation</th>
+                </tr>
+                <tr>
+                    <td>AllowedScopes</td>
+                    <td>Max scopes agent may hold</td>
+                    <td>read:events, write:events</td>
+                </tr>
+                <tr>
+                    <td>CanSpawn</td>
+                    <td>Whitelist of permitted child templates</td>
+                    <td>agent-b can spawn agent-c</td>
+                </tr>
+                <tr>
+                    <td>TTL</td>
+                    <td>Maximum agent lifetime</td>
+                    <td>3600 seconds</td>
+                </tr>
+                <tr>
+                    <td>State</td>
+                    <td>Template state lifecycle</td>
+                    <td>ACTIVE → DISABLED → DELETED</td>
+                </tr>
+            </table>
+        </section>
+
+        <section id="static-vs-dynamic">
+            <h3>Static vs Dynamic Trust Lanes</h3>
+            <ul>
+                <li><strong>Static Lane (Cert):</strong> Certificate-based identity (changes require re-certification)</li>
+                <li><strong>Dynamic Lane (Cedar):</strong> Runtime-updateable policies (changes apply immediately)</li>
+                <li><strong>Key Principle:</strong> Cert is hard ceiling; Cedar can only restrict further</li>
+            </ul>
+        </section>
+
+        <section id="correlation-id">
+            <h3>Correlation ID & Multi-Hop Tracing</h3>
+            <p>UUID v7 correlation ID traces request end-to-end:</p>
+            <ul>
+                <li>Agent A → mTLS → Agent B</li>
+                <li>Agent B → MCP validation → S3 operation</li>
+                <li>Both CloudWatch + GCP Logging stamp same ID</li>
+                <li><strong>Benefit:</strong> Full audit trail reconstructable from either org</li>
+            </ul>
+            <p><em>Note: correlationId not in current IETF draft; PoC proposes addition for v2</em></p>
+        </section>
+
+        <section id="next">
+            <h3>Ready to See It in Action?</h3>
+            <p><a href="/">Go to Demo →</a></p>
+        </section>
+    </div>
+</body>
+</html>

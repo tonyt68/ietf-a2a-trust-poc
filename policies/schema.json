@@ -1,0 +1,35 @@
+{
+  "namespaces": {
+    "A2A": {
+      "entityTypes": {
+        "Agent": {
+          "shape": {
+            "type": "Record",
+            "attributes": {
+              "id": {"type": "String"},
+              "org": {"type": "String"},
+              "scopes": {
+                "type": "Set",
+                "element": {"type": "String"}
+              }
+            }
+          }
+        }
+      },
+      "actions": {
+        "WriteEvent": {
+          "appliesTo": {
+            "principalTypes": ["Agent"],
+            "resourceTypes": ["S3"]
+          }
+        },
+        "ReadEvent": {
+          "appliesTo": {
+            "principalTypes": ["Agent"],
+            "resourceTypes": ["S3"]
+          }
+        }
+      }
+    }
+  }
+}

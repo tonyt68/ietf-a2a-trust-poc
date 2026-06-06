@@ -1,0 +1,95 @@
+services:
+  mcp_server:
+    build:
+      context: ./services/mcp_server
+      dockerfile: Dockerfile
+    ports:
+      - "${MCP_PORT:-8001}:8001"
+    environment:
+      - AWS_REGION=${AWS_REGION}
+      - AWS_SECRETS_NAME=${AWS_SECRETS_NAME}
+      - S3_BUCKET=${S3_BUCKET}
+      - DYNAMODB_TABLE=${DYNAMODB_TABLE}
+      - GCP_PROJECT_ID=${GCP_PROJECT_ID}
+      - CEDAR_POLICY_PATH=/app/policies
+      - LOG_LEVEL=${LOG_LEVEL:-INFO}
+      - GOOGLE_APPLICATION_CREDENTIALS=/root/.config/gcloud/application_default_credentials.json
+      - AWS_ACCESS_KEY_ID=${AWS_ACCESS_KEY_ID}
+      - AWS_SECRET_ACCESS_KEY=${AWS_SECRET_ACCESS_KEY}
+      - CERTS_DIR=/app/certs
+    volumes:
+      - ./services/mcp_server:/app
+      - ./policies:/app/policies
+      - ./certs:/app/certs
+      - ~/.config/gcloud:/root/.config/gcloud:ro
+      - ~/.aws:/root/.aws:ro
+    networks:
+      - a2a_network
+    depends_on:
+      - dynamodb_local
+    command: uvicorn main:app --host 0.0.0.0 --port 8001 --reload
+
+  admin_bootstrap:
+    build:
+      context: ./services/admin_bootstrap
+      dockerfile: Dockerfile
+    ports:
+      - "${ADMIN_PORT:-8002}:8002"
+    environment:
+      - AWS_REGION=${AWS_REGION}
+      - AWS_SECRETS_NAME=${AWS_SECRETS_NAME}
+      - DYNAMODB_TABLE=${DYNAMODB_TABLE}
+      - LOG_LEVEL=${LOG_LEVEL:-INFO}
+      - CERTS_DIR=/app/certs
+      - AWS_ACCESS_KEY_ID=${AWS_ACCESS_KEY_ID}
+      - AWS_SECRET_ACCESS_KEY=${AWS_SECRET_ACCESS_KEY}
+    volumes:
+      - ./services/admin_bootstrap:/app
+      - ./certs:/app/certs
+    networks:
+      - a2a_network
+    depends_on:
+      - dynamodb_local
+    command: uvicorn main:app --host 0.0.0.0 --port 8002 --reload
+
+  demo_web:
+    build:
+      context: ./demo
+      dockerfile: Dockerfile
+    ports:
+      - "${DEMO_PORT:-8765}:8765"
+    environment:
+      - AWS_REGION=${AWS_REGION}
+      - AWS_SECRETS_NAME=${AWS_SECRETS_NAME}
+      - MCP_URL=http://mcp_server:8001
+      - ADMIN_URL=http://admin_bootstrap:8002
+      - LOG_LEVEL=${LOG_LEVEL:-INFO}
+      - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY}
+      - CERTS_DIR=/app/certs
+    volumes:
+      - ./demo:/app
+      - ./certs:/app/certs
+    networks:
+      - a2a_network
+    depends_on:
+      - mcp_server
+      - admin_bootstrap
+    command: uvicorn app:app --host 0.0.0.0 --port 8765 --reload
+
+  dynamodb_local:
+    image: amazon/dynamodb-local:latest
+    ports:
+      - "8000:8000"
+    networks:
+      - a2a_network
+    volumes:
+      - dynamodb_data:/home/dynamodblocal/data
+    command: "-jar DynamoDBLocal.jar -sharedDb"
+
+networks:
+  a2a_network:
+    driver: bridge
+
+volumes:
+  dynamodb_data:
+    driver: local

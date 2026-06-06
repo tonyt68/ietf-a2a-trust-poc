@@ -1,0 +1,68 @@
+# Secrets & Credentials
+.env
+*.pem
+*.key
+service-account.json
+*.crt
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+*.egg-info/
+.pytest_cache/
+.coverage
+htmlcov/
+
+# Virtual Environments
+venv/
+.venv/
+env/
+ENV/
+
+# IDEs
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Terraform
+.terraform/
+.terraform.lock.hcl
+*.tfstate
+*.tfstate.*
+terraform.tfvars
+
+# Docker
+*.log
+.dockerignore
+
+# Build artifacts
+dist/
+build/
+*.egg
+
+# Node (if any)
+node_modules/
+certs/
+
+# Internal working docs — not for public IETF repo
+ARCHITECTURE.md
+IMPLEMENTATION.md
+NOTES.md
+PHASE7_REMAINING.md
+PITCH.md
+
+# Local utilities (personal use, not for repo)
+check_costs.py
+
+# Tech debt (internal tracking, not for repo)
+TECH_DEBT.md
+
+# Social media (local drafts, not for repo)
+LINKEDIN_POST.md

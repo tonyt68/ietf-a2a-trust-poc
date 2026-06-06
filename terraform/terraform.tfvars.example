@@ -1,0 +1,5 @@
+aws_region      = "us-east-1"
+gcp_project_id  = "your-gcp-project-id"
+app_name        = "a2a-trust-poc"
+s3_bucket_name  = "a2a-trust-poc-events"
+dynamodb_table_name = "template_registry"
