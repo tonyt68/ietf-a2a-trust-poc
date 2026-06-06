@@ -1,9 +1,11 @@
 """
 Policy Authority Validation — IETF A2A Trust draft-tonyai-a2a-trust-00
 Implements: Section 9.3 (Dual-Signature Requirement)
+            Section 9.3: Chain of custody verification
 
 Enforces that BOTH Owner and Policy Authority must cryptographically sign
 any policy update before it can be applied. Single signature is insufficient.
+Also validates that Owner and PA certificates are legitimate (not revoked, expired, etc).
 """
 
 import logging
@@ -13,6 +15,7 @@ import tempfile
 import os
 from typing import Tuple, Optional
 from pathlib import Path
+from policy_authority_chain import PolicyAuthorityChainValidator
 
 log = logging.getLogger(__name__)
 
@@ -21,9 +24,12 @@ class PolicyValidator:
     """Validates policy updates with dual RSA-SHA256 signatures (Owner + PA)"""
 
     def __init__(self, owner_cert_path: str = "./certs/owner.crt",
-                 pa_cert_path: str = "./certs/pa.crt"):
+                 pa_cert_path: str = "./certs/pa.crt",
+                 ca_root_path: str = "./certs/ca-root.crt",
+                 revocation_list_path: str = "./certs/revocation_list.json"):
         self.owner_cert_path = Path(owner_cert_path)
         self.pa_cert_path = Path(pa_cert_path)
+        self.chain_validator = PolicyAuthorityChainValidator(ca_root_path, revocation_list_path)
 
     def _verify_rsa_signature(self, data: str, signature_b64: str, cert_path: Path) -> bool:
         """
@@ -131,6 +137,21 @@ class PolicyValidator:
         except Exception as e:
             log.error("Failed to serialize policy document", extra={"error": str(e)})
             return (False, "Policy document serialization error")
+
+        # 2.5. CHAIN OF CUSTODY: Validate Owner and PA certificate integrity (fail-closed)
+        owner_chain_valid, owner_chain_reason = self.chain_validator.validate_policy_authority_chain(
+            self.owner_cert_path, "Owner Authority"
+        )
+        if not owner_chain_valid:
+            log.warning("Owner certificate chain of custody check failed", extra={"reason": owner_chain_reason})
+            return (False, owner_chain_reason)
+
+        pa_chain_valid, pa_chain_reason = self.chain_validator.validate_policy_authority_chain(
+            self.pa_cert_path, "Policy Authority"
+        )
+        if not pa_chain_valid:
+            log.warning("PA certificate chain of custody check failed", extra={"reason": pa_chain_reason})
+            return (False, pa_chain_reason)
 
         # 3. Verify Owner signature
         if not self.owner_cert_path.exists():
