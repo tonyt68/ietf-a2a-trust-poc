@@ -9,6 +9,7 @@ from cert_validator import CertValidator
 from replay_prevention import ReplayPrevention
 from audit_chain import AuditChain
 from policy_validator import PolicyValidator
+from policy_field_guard import PolicyFieldGuard
 
 log = logging.getLogger(__name__)
 
@@ -32,6 +33,7 @@ class EventService:
         self.replay_prevention = replay_prevention or ReplayPrevention()
         self.audit_chain = audit_chain or AuditChain()
         self.policy_validator = PolicyValidator()
+        self.policy_field_guard = PolicyFieldGuard()
         import os
         self.certs_dir = Path(os.getenv("CERTS_DIR", "./certs"))
 
@@ -98,6 +100,28 @@ class EventService:
                     "stage": "policy_authority_validation"
                 })
                 return (False, None, decision, reason)
+
+            # 1.6. POLICY FIELD GUARD — CERT IDENTITY PROTECTION (Section 9.3)
+            # Prevent modifications to certificate identity fields (immutable)
+            if "policy_update" in event_data and "policy_doc" in event_data:
+                cert_dict = {"agent_id": agent_id, "org_id": "default"}
+                fields_valid, fields_reason = self.policy_field_guard.validate_policy_update(
+                    cert_dict, event_data.get("policy_doc", {})
+                )
+                if not fields_valid:
+                    decision = "DENIED"
+                    reason = fields_reason
+                    log.warning(f"Policy field guard rejected update: {reason}")
+                    self._log_audit({
+                        "correlationId": correlation_id,
+                        "spanId": span_id,
+                        "agent": agent_id,
+                        "action": "write_event",
+                        "decision": decision,
+                        "reason": reason,
+                        "stage": "policy_field_guard"
+                    })
+                    return (False, None, decision, reason)
 
             # 2. REPLAY ATTACK PREVENTION — MANDATORY (Section 16.2)
             # Fail-closed: missing nonce or timestamp = DENY, no exceptions
