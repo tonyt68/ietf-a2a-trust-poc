@@ -107,6 +107,24 @@ async def run_scenario(scenario: dict):
         return {"status": "error", "message": str(e)}
 
 
+@app.get("/api/certs")
+async def get_certs():
+    """Return agent cert metadata for display in UI."""
+    try:
+        import pathlib
+        certs_dir = pathlib.Path(os.getenv("CERTS_DIR", "./certs"))
+        result = {}
+        for agent in ["agent-a", "agent-b"]:
+            meta_path = certs_dir / f"{agent}.json"
+            if meta_path.exists():
+                with open(meta_path) as f:
+                    result[agent] = json.load(f)
+        return {"status": "success", "certs": result}
+    except Exception as e:
+        log.error(f"Cert fetch failed: {e}")
+        return {"status": "error", "message": str(e)}
+
+
 @app.get("/api/audit/recent")
 async def get_recent_audit():
     """Fetch last 10 audit entries from CloudWatch Logs (last 1 hour)."""

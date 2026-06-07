@@ -21,9 +21,7 @@ def test_valid_policy_fields():
     agent_cert = {"agent_id": "agent-b", "org_id": "acme-corp"}
 
     policy_update = {
-        "allowed_scopes": ["write:events"],
-        "can_spawn": ["agent-a"],
-        "max_children": 5,
+        "allowed_scopes": ["write:events"],  # can_spawn/max_children are immutable — not here
         "ttl_seconds": 3600,
         "description": "Updated policy"
     }
@@ -33,6 +31,26 @@ def test_valid_policy_fields():
     assert valid, f"Expected valid, got: {reason}"
     assert "only policy fields modified" in reason.lower()
     print(f"  ✅ PASS: {reason}")
+
+
+def test_attempt_modify_can_spawn():
+    """Test: can_spawn is IMMUTABLE — new cert required to change spawn rights"""
+    print("\n[TEST 2] Attempt to modify can_spawn — should DENY (new cert required)")
+
+    guard = PolicyFieldGuard()
+    agent_cert = {"agent_id": "agent-b", "org_id": "acme-corp"}
+
+    policy_update = {
+        "allowed_scopes": ["write:events"],
+        "can_spawn": ["d9cdba8d-5ada-485a-bd09-7a392d1f9625", "some-other-uuid"],  # ILLEGAL
+    }
+
+    valid, reason = guard.validate_policy_update(agent_cert, policy_update)
+
+    assert not valid, f"Expected DENY, got valid: {reason}"
+    assert "can_spawn" in reason.lower() or "cannot modify" in reason.lower()
+    print(f"  ✅ PASS: Correctly blocked — {reason}")
+    print(f"         To change spawn rights, issue a new certificate.")
 
 
 def test_attempt_modify_agent_id():
@@ -176,6 +194,7 @@ if __name__ == "__main__":
 
     try:
         test_valid_policy_fields()
+        test_attempt_modify_can_spawn()
         test_attempt_modify_agent_id()
         test_attempt_modify_org_id()
         test_attempt_modify_cert_serial()
@@ -185,7 +204,7 @@ if __name__ == "__main__":
         test_list_modifiable_fields()
 
         print("\n" + "=" * 80)
-        print("✅ ALL POLICY FIELD GUARD TESTS PASSED (8/8)")
+        print("✅ ALL POLICY FIELD GUARD TESTS PASSED (9/9)")
         print("=" * 80)
 
     except AssertionError as e:

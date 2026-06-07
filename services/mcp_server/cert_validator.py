@@ -144,7 +144,12 @@ class CertValidator:
     def parse_auth_bounds(self, metadata_path: str) -> Optional[Dict]:
         """
         Parse ALL required IETF fields from template metadata.
-        Section 7.1: AllowedScopes, CanSpawn, MaxChildren, ScopeInherit, PolicyRef all REQUIRED.
+        Section 7.1 REQUIRED fields:
+          - AllowedScopes:  permitted operation scopes for this agent
+          - CanSpawn:       whitelist of permitted child templates this agent may instantiate
+          - MaxChildren:    maximum concurrent child agents allowed
+          - ScopeInherit:   child scopes must be strict-subset of parent (child ⊆ parent)
+          - PolicyRef:      reference to governing policy document
         """
         try:
             with open(metadata_path, "r") as f:
@@ -190,20 +195,22 @@ class CertValidator:
 
     def validate_spawn_check1(self, parent_meta: Dict, child_id: str) -> Tuple[bool, str]:
         """
-        Check 1 (Static): child template MUST appear in parent CanSpawn list.
+        Check 1 (Static): requested child template MUST appear in parent CanSpawn whitelist.
+        CanSpawn is a whitelist of permitted child TEMPLATES the parent agent may instantiate.
         Section 8.1: 'CanSpawn alone is insufficient but MUST pass first.'
         """
-        can_spawn = parent_meta.get("can_spawn", [])
+        can_spawn = parent_meta.get("can_spawn", [])  # whitelist of permitted child templates
         if child_id not in can_spawn:
-            return (False, f"'{child_id}' not in parent CanSpawn {can_spawn}")
-        return (True, "CanSpawn check passed")
+            return (False, f"Child template '{child_id}' not in parent permitted child templates {can_spawn}")
+        return (True, "Permitted child template check passed")
 
     def validate_spawn_check2(self, child_id: str, child_cert_path: str,
                                child_meta_path: str) -> Tuple[bool, str]:
         """
         Check 2 (Dynamic Registry): child template MUST be registered, CA-signed,
-        not revoked, and currently ACTIVE.
+        not revoked, and currently ACTIVE in the Template Registry.
         Section 8.1: 'Registry lookup alone insufficient but MUST also pass.'
+        Both checks required — either alone is insufficient.
         """
         # Must be CA-signed
         chain_ok, chain_reason = self.validate_chain(child_cert_path)

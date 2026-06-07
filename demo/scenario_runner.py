@@ -72,11 +72,54 @@ class ScenarioRunner:
             for f in [data_tmp, sig_tmp]:
                 if os.path.exists(f): os.unlink(f)
 
-    def create_dual_sig(self, policy_doc: dict) -> tuple:
-        """Create Owner + PA RSA signatures (Section 9.3)"""
-        canonical = json.dumps(policy_doc, sort_keys=True, separators=(',', ':'))
-        owner_sig = self._sign(canonical, self.owner_key)
-        pa_sig    = self._sign(canonical, self.pa_key)
+    # Identity fields the Owner signature covers — MUST match policy_validator.py IDENTITY_FIELDS
+    IDENTITY_FIELDS = {
+        "agent_id", "agent_uuid", "org_id", "subject", "issuer",
+        "owner", "cert_serial", "cert_subject", "cert_issuer",
+        "cert_public_key", "cert_not_before", "cert_not_after",
+        "cert_fingerprint", "cert_chain", "template_version",
+        "can_spawn",     # Immutable — new cert required to change (§8.1)
+        "max_children",  # Immutable — structural spawn bound
+    }
+
+    # Policy fields the PA signature covers (mutable policy section)
+    POLICY_FIELDS = {
+        "allowed_scopes", "can_spawn", "max_children", "scope_inherit",
+        "policy_ref", "ttl_seconds", "updated_at", "description", "tags", "conditions",
+    }
+
+    def create_dual_sig(self, policy_doc: dict, existing_cert: dict = None) -> tuple:
+        """
+        Two-phase RSA signing (Section 9.3):
+          Phase 1 — Owner signs CERT IDENTITY fields from existing_cert
+                    Proves identity section is unchanged and authentic
+          Phase 2 — PA signs POLICY fields from policy_doc
+                    Authorizes the specific policy update
+
+        Returns: (owner_sig, pa_sig)
+        """
+        # Phase 1: Owner signs the identity fields of the existing cert
+        if existing_cert:
+            identity_section = {k: v for k, v in existing_cert.items() if k in self.IDENTITY_FIELDS}
+        else:
+            # Fallback: load agent-b cert as default
+            cert_path = self.certs_dir / "agent-b.json"
+            if cert_path.exists():
+                import json as _json
+                with open(cert_path) as f:
+                    cert_data = _json.load(f)
+                identity_section = {k: v for k, v in cert_data.items() if k in self.IDENTITY_FIELDS}
+            else:
+                identity_section = {}
+
+        canonical_identity = json.dumps(identity_section, sort_keys=True, separators=(',', ':'))
+        owner_sig = self._sign(canonical_identity, self.owner_key)
+
+        # Phase 2: PA signs only the policy fields being updated
+        policy_section = {k: v for k, v in policy_doc.items() if k in self.POLICY_FIELDS}
+        canonical_policy = json.dumps(policy_section, sort_keys=True, separators=(',', ':'))
+        pa_sig = self._sign(canonical_policy, self.pa_key)
+
         return (owner_sig, pa_sig)
 
     def call_claude(self, prompt: str) -> str:
@@ -146,18 +189,32 @@ class ScenarioRunner:
                   "granting agent-b continued write access. One sentence.")
         claude_response = "Hardcoded response (Claude auth disabled)"  # Skip Claude call
 
-        policy_doc = {
-            "allowed_scopes": ["write:events"],
-            "can_spawn": [],
-            "ttl_seconds": 86400,
-            "owner": "agent-b",
-            "created_at": self.get_timestamp(),
-            "description": f"Policy update: {claude_response}",
-        }
-        owner_sig, pa_sig = self.create_dual_sig(policy_doc)
+        # Load existing cert — owner signs its identity section (Phase 1)
+        cert_path = self.certs_dir / "agent-b.json"
+        existing_cert = {}
+        if cert_path.exists():
+            with open(cert_path) as f:
+                existing_cert = json.load(f)
 
-        r = self._post(agent_id, ["write:events"],
-                       {"policy_update": True, "policy_doc": policy_doc, "owner_sig": owner_sig, "pa_sig": pa_sig})
+        policy_doc = {
+            "allowed_scopes": ["write:events"],  # can_spawn is immutable — not in policy updates
+            "ttl_seconds": 86400,
+            "description": f"Policy update: {claude_response}",
+            "updated_at": self.get_timestamp(),
+        }
+
+        # Two-phase signing:
+        #   owner_sig = sign(identity fields of existing cert)  → Phase 1
+        #   pa_sig    = sign(policy fields of policy_doc)       → Phase 2
+        owner_sig, pa_sig = self.create_dual_sig(policy_doc, existing_cert)
+
+        r = self._post(agent_id, ["write:events"], {
+            "policy_update": True,
+            "policy_doc":    policy_doc,
+            "existing_cert": existing_cert,   # Phase 1: identity fields for owner sig verification
+            "owner_sig":     owner_sig,
+            "pa_sig":        pa_sig,
+        })
         decision = "ALLOWED" if r.status_code == 200 else "DENIED"
         self.log_to_audit(2, agent_id, "policy_update", decision,
                           "Dual-sig policy update (Owner + PA, Section 9.3)")
@@ -189,19 +246,27 @@ class ScenarioRunner:
         claude_response = "Hardcoded response (Claude auth disabled)"  # Skip Claude call
 
         policy_doc = {
-            "name":       "policy-missing-pa-sig",
-            "agent":      "agent-a",
-            "scopes":     ["write:events"],
-            "created_at": self.get_timestamp(),
+            "allowed_scopes": ["write:events"],
+            "ttl_seconds":    86400,
+            "description":    "Scenario 4: missing PA sig test",
+            "updated_at":     self.get_timestamp(),
         }
-        owner_sig, _ = self.create_dual_sig(policy_doc)
 
-        # Send with pa_sig=None — should be caught by policy_authority validation
+        cert_path = self.certs_dir / "agent-b.json"
+        existing_cert = {}
+        if cert_path.exists():
+            with open(cert_path) as f:
+                existing_cert = json.load(f)
+
+        # Phase 1 only — deliberately omit PA signature
+        owner_sig, _ = self.create_dual_sig(policy_doc, existing_cert)
+
         r = self._post(agent_id, ["write:events"], {
-            "dual_sig_analysis": claude_response,
-            "policy_doc": policy_doc,
-            "owner_sig":  owner_sig,
-            "pa_sig":     None,  # Missing — Section 9.3 violation
+            "policy_update": True,
+            "policy_doc":    policy_doc,
+            "existing_cert": existing_cert,
+            "owner_sig":     owner_sig,
+            "pa_sig":        None,  # Missing — Section 9.3 violation
         })
         decision = "ALLOWED" if r.status_code == 200 else "DENIED"
         self.log_to_audit(4, agent_id, "policy_update", decision,
@@ -217,19 +282,27 @@ class ScenarioRunner:
         claude_response = "Hardcoded response (Claude auth disabled)"  # Skip Claude call
 
         policy_doc = {
-            "name":       "policy-tampered-pa",
-            "agent":      "agent-a",
-            "scopes":     ["write:events"],
-            "created_at": self.get_timestamp(),
+            "allowed_scopes": ["write:events"],
+            "ttl_seconds":    86400,
+            "description":    "Scenario 5: tampered PA sig test",
+            "updated_at":     self.get_timestamp(),
         }
-        owner_sig, pa_sig = self.create_dual_sig(policy_doc)
-        tampered_pa_sig = pa_sig[:-8] + "TAMPERED"  # Corrupt last 8 chars
+
+        cert_path = self.certs_dir / "agent-b.json"
+        existing_cert = {}
+        if cert_path.exists():
+            with open(cert_path) as f:
+                existing_cert = json.load(f)
+
+        owner_sig, pa_sig = self.create_dual_sig(policy_doc, existing_cert)
+        tampered_pa_sig = pa_sig[:-8] + "TAMPERED"  # Corrupt PA sig — Phase 2 must fail
 
         r = self._post(agent_id, ["write:events"], {
-            "sig_tampering":  claude_response,
-            "policy_doc":     policy_doc,
-            "owner_sig":      owner_sig,
-            "pa_sig":         tampered_pa_sig,
+            "policy_update": True,
+            "policy_doc":    policy_doc,
+            "existing_cert": existing_cert,
+            "owner_sig":     owner_sig,
+            "pa_sig":        tampered_pa_sig,
         })
         decision = "ALLOWED" if r.status_code == 200 else "DENIED"
         self.log_to_audit(5, agent_id, "policy_update", decision,

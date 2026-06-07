@@ -6,10 +6,6 @@ terraform {
       source  = "hashicorp/aws"
       version = "~> 5.0"
     }
-    google = {
-      source  = "hashicorp/google"
-      version = "~> 5.0"
-    }
   }
 }
 
@@ -17,24 +13,10 @@ provider "aws" {
   region = var.aws_region
 }
 
-provider "google" {
-  project = var.gcp_project_id
-  region  = var.gcp_region
-}
-
 # Variables
 variable "aws_region" {
   description = "AWS region"
   default     = "us-east-1"
-}
-
-variable "gcp_project_id" {
-  description = "GCP project ID"
-}
-
-variable "gcp_region" {
-  description = "GCP region"
-  default     = "us-central1"
 }
 
 # Tags for all resources

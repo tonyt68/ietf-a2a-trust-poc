@@ -27,6 +27,18 @@ import requests
 BASE_URL = "http://localhost:8001"
 CERTS_DIR = Path(__file__).parent.parent / "certs"
 
+# Load agent UUIDs from cert metadata
+def _load_uuid(agent_id: str) -> str:
+    meta_path = CERTS_DIR / f"{agent_id}.json"
+    if meta_path.exists():
+        import json as _json
+        with open(meta_path) as f:
+            return _json.load(f).get("agent_uuid", agent_id)
+    return agent_id
+
+AGENT_A_UUID = _load_uuid("agent-a")
+AGENT_B_UUID = _load_uuid("agent-b")
+
 passed   = 0
 failed   = 0
 findings = []
@@ -55,7 +67,7 @@ def valid_payload(agent_id: str = "agent-b",
     return {
         "correlation_id":    str(uuid.uuid4()),
         "agent_id":          agent_id,
-        "requested_scopes":  scopes or ["write:events"],
+        "requested_scopes":  ["write:events"] if scopes is None else scopes,
         "event_data":        event_data or {"test": "data"},
         "request_nonce":     nonce(),
         "request_timestamp": utcnow(),
@@ -353,7 +365,7 @@ def a22_cross_org_forged_grant():
         "cross_org_grant": {
             "grantor":        "victim-org",
             "grantee":        "attacker-org",
-            "template":       "agent-b",
+            "template":       AGENT_B_UUID,  # UUID4 — not human-readable name
             "allowed_scopes": ["admin:all"],
             "ttl_seconds":    86400,
             "max_spawns":     999,

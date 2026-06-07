@@ -23,7 +23,7 @@ resource "aws_secretsmanager_secret" "a2a_poc" {
 # NOTE: Secret value is created manually via AWS console or AWS CLI
 # terraform apply will fail if secret value is not populated in AWS Secrets Manager
 # After Terraform apply, populate the secret with:
-# aws secretsmanager put-secret-value --secret-id a2a-trust-poc/secrets --secret-string '{"jwt_secret":"...","hmac_secret":"...","admin_api_key":"...","gcp_service_account_json":"..."}'
+# aws secretsmanager put-secret-value --secret-id a2a-trust-poc/secrets --secret-string '{"jwt_secret":"...","hmac_secret":"...","admin_api_key":"..."}'
 
 output "kms_key_id" {
   value       = aws_kms_key.secrets.id

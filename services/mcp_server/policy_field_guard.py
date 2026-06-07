@@ -19,6 +19,7 @@ class PolicyFieldGuard:
     """
 
     # Certificate identity fields — IMMUTABLE, cannot be changed via policy update
+    # To change any of these, a new certificate must be issued by the CA.
     IMMUTABLE_CERT_FIELDS = {
         "cert_serial",              # X.509 serial number
         "cert_issuer",              # CA issuer DN
@@ -29,14 +30,15 @@ class PolicyFieldGuard:
         "cert_fingerprint",         # SHA-256 cert fingerprint
         "cert_chain",               # CA chain
         "agent_id",                 # Agent identity (from cert CN)
+        "agent_uuid",               # Agent UUID4 (cryptographic identity)
         "org_id",                   # Organization (from cert OU)
+        "can_spawn",                # Permitted child template UUIDs — immutable, new cert required to change (§7.1, §8.1)
+        "max_children",             # Max concurrent children — structural bound, new cert required
     }
 
-    # Modifiable policy fields only
+    # Modifiable policy fields — updatable via dual-signed policy update (Owner + PA)
     MODIFIABLE_POLICY_FIELDS = {
         "allowed_scopes",           # Dynamic scope grants
-        "can_spawn",                # Allowed child templates
-        "max_children",             # Max spawn limit
         "scope_inherit",            # Inheritance rules
         "policy_ref",               # Reference policy version
         "ttl_seconds",              # TTL override

@@ -35,21 +35,21 @@ fi
 # ── Step 1: Static tests ──────────────────────────────────────────────────
 echo ""
 echo "═══════════════════════════════════════════════════════════════"
-echo " Step 1/4: Static tests (IETF conformance, runs in seconds)"
+echo " Step 1/5: IETF Conformance Vectors (50 vectors)"
 echo "═══════════════════════════════════════════════════════════════"
 python3 tests/test_vectors.py || die "Static tests failed. Fix before starting."
 echo -e "${GREEN}✓ Static tests passed${NC}"
 
 echo ""
 echo "═══════════════════════════════════════════════════════════════"
-echo " Step 1.5: Policy Signature Validation Tests (Section 9.3)"
+echo " Step 1.5/5: Two-Phase Policy Signature Tests (Section 9.3)"
 echo "═══════════════════════════════════════════════════════════════"
 python3 tests/test_policy_signatures.py || die "Policy signature tests failed. Dual-sig validation broken."
 echo -e "${GREEN}✓ Policy signature tests passed${NC}"
 
 echo ""
 echo "═══════════════════════════════════════════════════════════════"
-echo " Step 1.6: Policy Field Guard Tests (Cert Identity Protection)"
+echo " Step 1.6/5: Policy Field Guard Tests (Cert Identity Protection)"
 echo "═══════════════════════════════════════════════════════════════"
 python3 tests/test_policy_field_guard.py || die "Policy field guard tests failed. Cert protection broken."
 echo -e "${GREEN}✓ Policy field guard tests passed${NC}"
@@ -101,10 +101,18 @@ echo -e "${GREEN}✓ All services healthy${NC}"
 # ── Step 4: Smoke tests ───────────────────────────────────────────────────
 echo ""
 echo "═══════════════════════════════════════════════════════════════"
-echo " Step 4/4: Smoke tests (live server verification)"
+echo " Step 4/5: Smoke tests (live server verification)"
 echo "═══════════════════════════════════════════════════════════════"
 python3 tests/smoke_test.py || die "Smoke tests failed. Services stopped."
 echo -e "${GREEN}✓ Smoke tests passed${NC}"
+
+# ── Step 5: Red team security tests ──────────────────────────────────────
+echo ""
+echo "═══════════════════════════════════════════════════════════════"
+echo " Step 5/5: Red Team Security Tests (IETF §16 + OWASP Top 10)"
+echo "═══════════════════════════════════════════════════════════════"
+python3 tests/red_team_test.py || die "Red team tests failed. Security regression detected."
+echo -e "${GREEN}✓ Red team tests passed${NC}"
 
 # ── Open browser ──────────────────────────────────────────────────────────
 if command -v open &>/dev/null; then

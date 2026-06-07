@@ -92,8 +92,10 @@ for field in ["allowed_scopes", "can_spawn", "max_children", "scope_inherit",
 # ─── Section 8: Spawn Chain Validation ───────────────────────────────────────
 print("\n── Section 8: Spawn Chain (Two-Check Rule) ───────────────────────────────")
 
-# TV-08: Check 1 — agent-b CAN spawn agent-a (in CanSpawn)
-vector("TV-08: agent-b CanSpawn includes 'agent-a'", True, "agent-a" in meta_b.get("can_spawn", []))
+# TV-08: Check 1 — agent-b CAN spawn agent-a (CanSpawn holds agent-a's UUID4)
+agent_a_uuid = meta_a.get("agent_uuid", "")
+vector("TV-08: agent-b CanSpawn includes agent-a UUID", True,
+       agent_a_uuid != "" and agent_a_uuid in meta_b.get("can_spawn", []))
 
 # TV-09: Check 1 — agent-a CANNOT spawn (empty CanSpawn)
 vector("TV-09: agent-a CanSpawn is empty (no spawn rights)", True, meta_a.get("can_spawn", []) == [])
@@ -125,11 +127,11 @@ parent_scopes = ["read:events"]
 vector("TV-14: write:events ⊄ read:events — DENIED", True,
        not all(s in parent_scopes for s in child_scopes))
 
-# TV-15: empty scopes ⊆ anything — edge case
+# TV-15: empty scopes DENIED — zero-trust requires agent to declare intent (Section 16.1)
 child_scopes = []
 parent_scopes = ["read:events"]
-vector("TV-15: empty scopes ⊆ parent — ALLOWED (valid edge case)", True,
-       all(s in parent_scopes for s in child_scopes))
+vector("TV-15: empty scopes DENIED — agent must declare intent (Section 16.1)", True,
+       len(child_scopes) == 0)  # Static check: empty list detected = would be denied at runtime
 
 
 # ─── Section 9.3: Dual Signature ─────────────────────────────────────────────
@@ -176,7 +178,7 @@ vector("TV-22: owner RSA sign/verify round-trip", True,
 # ─── Section 9.4: Policy Content Hash ────────────────────────────────────────
 print("\n── Section 9.4: Policy Content Hash + Version ───────────────────────────")
 
-policy_doc = {"name": "test-policy", "agent": "agent-a", "scopes": ["read:events"]}
+policy_doc = {"name": "test-policy", "agent_uuid": meta_a.get("agent_uuid"), "allowed_scopes": ["read:events"]}
 canonical = json.dumps(policy_doc, sort_keys=True, separators=(',', ':'))
 content_hash = hashlib.sha256(canonical.encode()).hexdigest()
 
@@ -203,8 +205,10 @@ with open(crl_file) as f:
 vector("TV-25: CRL exists and is valid JSON", True, isinstance(crl, dict))
 vector("TV-26: CRL has 'revoked' list",   True, "revoked" in crl)
 vector("TV-27: CRL has 'disabled' list",  True, "disabled" in crl)
-vector("TV-28: Active agents not in CRL", True,
-       "agent-a" not in crl["revoked"] and "agent-b" not in crl["revoked"])
+agent_a_uuid = meta_a.get("agent_uuid", "")
+agent_b_uuid = meta_b.get("agent_uuid", "")
+vector("TV-28: Active agent UUIDs not in CRL", True,
+       agent_a_uuid not in crl["revoked"] and agent_b_uuid not in crl["revoked"])
 
 
 # ─── Section 13: Fail Closed ─────────────────────────────────────────────────

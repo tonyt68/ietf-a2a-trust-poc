@@ -11,6 +11,7 @@ import os
 import json
 import subprocess
 import hashlib
+import uuid
 from pathlib import Path
 from datetime import datetime, timezone, timedelta
 
@@ -88,6 +89,7 @@ def setup_agent_templates():
     agents = [
         {
             "agent_id":      "agent-a",
+            "agent_uuid":    str(uuid.uuid4()),    # Section 6: cryptographic agent identity
             "cn":            "agent-a",
             "org_id":        "tonyai-org",
             "owner":         "ajtrujillo68@gmail.com",
@@ -95,20 +97,21 @@ def setup_agent_templates():
             "allowed_scopes": ["read:events"],
             "can_spawn":     [],
             "max_children":  0,
-            "scope_inherit": "strict-subset",      # Section 8.3 — REQUIRED field
-            "policy_ref":    "policy-store/agent-a/current",  # Section 7.1 — REQUIRED
+            "scope_inherit": "strict-subset",
+            "policy_ref":    "policy-store/agent-a/current",
             "template_version": "1.0",
-            "ttl_seconds":   86400,                # 24h
+            "ttl_seconds":   86400,
             "ttl_days":      365,
         },
         {
             "agent_id":      "agent-b",
+            "agent_uuid":    str(uuid.uuid4()),    # Section 6: cryptographic agent identity
             "cn":            "agent-b",
             "org_id":        "tonyai-org",
             "owner":         "ajtrujillo68@gmail.com",
             "key_usage":     ["write", "spawn", "delegate"],
             "allowed_scopes": ["write:events"],
-            "can_spawn":     ["agent-a"],
+            "can_spawn":     [],   # Populated post-generation with agent-a's UUID (see below)
             "max_children":  5,
             "scope_inherit": "strict-subset",
             "policy_ref":    "policy-store/agent-b/current",
@@ -154,18 +157,19 @@ def setup_agent_templates():
         metadata = {
             # Identity (Section 7.1 Static Fields — all REQUIRED)
             "subject":           aid,
+            "agent_id":          aid,
+            "agent_uuid":        agent["agent_uuid"],   # Section 6: UUID4 cryptographic identity
             "issuer":            "A2A-Trust-Template-Registry-CA",
             "owner":             agent["owner"],
             "org_id":            agent["org_id"],
             "key_usage":         agent["key_usage"],
             "allowed_scopes":    agent["allowed_scopes"],
-            "can_spawn":         agent["can_spawn"],
+            "can_spawn":         agent["can_spawn"],    # whitelist of permitted child templates
             "max_children":      agent["max_children"],
             "scope_inherit":     agent["scope_inherit"],
             "policy_ref":        agent["policy_ref"],
             "ttl_seconds":       agent["ttl_seconds"],
             # Operational
-            "agent_id":          aid,
             "template_version":  agent["template_version"],
             "state":             "ACTIVE",
             "created_at":        now.isoformat(),
@@ -183,9 +187,26 @@ def setup_agent_templates():
         with open(f"{aid}.json", "w") as f:
             json.dump(metadata, f, indent=2)
 
-        print(f"  ✓ AllowedScopes={agent['allowed_scopes']}  CanSpawn={agent['can_spawn']}  MaxChildren={agent['max_children']}")
+        print(f"  ✓ AllowedScopes={agent['allowed_scopes']}  MaxChildren={agent['max_children']}")
         print(f"  ✓ ScopeInherit={agent['scope_inherit']}  PolicyRef={agent['policy_ref']}")
+        print(f"  ✓ AgentUUID={agent['agent_uuid']}")
         print(f"  ✓ Issuer=A2A-Trust-Template-Registry-CA (CA-signed, NOT self-signed)")
+
+    # Wire agent-b.can_spawn with agent-a's UUID (Section 8.1 — immutable spawn whitelist)
+    # can_spawn uses UUID4 agent IDs, not human-readable names
+    with open("agent-a.json") as f:
+        agent_a_meta = json.load(f)
+    with open("agent-b.json") as f:
+        agent_b_meta = json.load(f)
+
+    agent_a_uuid = agent_a_meta["agent_uuid"]
+    agent_b_meta["can_spawn"] = [agent_a_uuid]
+    agent_b_meta["authorization_bounds"]["can_spawn"] = [agent_a_uuid]
+
+    with open("agent-b.json", "w") as f:
+        json.dump(agent_b_meta, f, indent=2)
+
+    print(f"\n  ✓ agent-b.can_spawn = [{agent_a_uuid}] (agent-a UUID — immutable, new cert required to change)")
 
     os.chdir("..")
 

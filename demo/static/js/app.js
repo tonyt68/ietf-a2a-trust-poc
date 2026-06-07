@@ -18,6 +18,7 @@ const SCENARIOS = {
 
 document.addEventListener('DOMContentLoaded', function() {
     attachScenarioListeners();
+    loadCerts();
 });
 
 function attachScenarioListeners() {
@@ -63,26 +64,36 @@ async function runScenario(scenarioId) {
             prevEntryHash = await computeHash(auditLog[auditLog.length - 1]);
         }
 
-        // Add to audit log with server-generated correlationId
+        // Use ACTUAL decision from server — never the hardcoded expected value
+        const actualDecision = result.decision || scenario.decision;
+        const actualReason   = result.reason   || scenario.reason;
+
+        // Update card border to reflect actual runtime result
+        const card = document.querySelector(`[data-scenario="${scenarioId}"]`);
+        if (card) {
+            card.classList.remove('allowed', 'denied');
+            card.classList.add(actualDecision === 'ALLOWED' ? 'allowed' : 'denied');
+        }
+
         const auditEntry = {
-            correlationId: correlationId,
-            spanId: correlationId,  // Use correlationId as spanId (UUID7, sortable)
-            parentSpanId: parentSpanId,
-            scenario: scenarioId,
-            name: scenario.name,
-            agent: agentId,
-            action: agentId === 'agent-a' ? 'write_event' : 'read_event',
-            decision: scenario.decision,
-            reason: scenario.reason,
-            grantedScopes: scenario.decision === 'ALLOWED' ? scenario.requestedScopes : [],
+            correlationId:   correlationId,
+            spanId:          correlationId,
+            parentSpanId:    parentSpanId,
+            scenario:        scenarioId,
+            name:            scenario.name,
+            agent:           agentId,
+            action:          'write_event',
+            decision:        actualDecision,
+            reason:          actualReason,
+            grantedScopes:   actualDecision === 'ALLOWED' ? scenario.requestedScopes : [],
             requestedScopes: scenario.requestedScopes,
-            timestamp: new Date().toISOString(),
-            prevEntryHash: prevEntryHash,
-            certStatus: 'ACTIVE',
-            policy: 'cedar-default',
-            jwtValid: scenario.decision === 'ALLOWED',
-            hmacValid: scenario.decision === 'ALLOWED',
-            hmacsatisfied: scenario.decision === 'ALLOWED'
+            timestamp:       new Date().toISOString(),
+            prevEntryHash:   prevEntryHash,
+            certStatus:      'ACTIVE',
+            policy:          'cedar-default',
+            jwtValid:        actualDecision === 'ALLOWED',
+            hmacValid:       actualDecision === 'ALLOWED',
+            hmacsatisfied:   actualDecision === 'ALLOWED'
         };
 
         auditLog.push(auditEntry);
@@ -218,6 +229,53 @@ function showEntryDetails(entry) {
     });
 }
 
+async function loadCerts() {
+    try {
+        const resp = await fetch('/api/certs');
+        const data = await resp.json();
+        if (data.status !== 'success') return;
+
+        const grid = document.getElementById('cert-grid');
+        grid.innerHTML = '';
+
+        for (const [agentId, c] of Object.entries(data.certs)) {
+            const canSpawn = c.can_spawn && c.can_spawn.length > 0
+                ? c.can_spawn.map(t => `${t} template`).join(', ')
+                : null;
+            const expires = c.expires_at ? c.expires_at.split('T')[0] : '—';
+
+            const card = document.createElement('div');
+            card.className = 'cert-card';
+            card.innerHTML = `
+                <div class="cert-card-header">
+                    <span class="cert-agent-name">🤖 ${agentId}</span>
+                    <span class="cert-state active">${c.state || 'ACTIVE'}</span>
+                </div>
+                <div class="cert-body">
+                    <div class="cert-section-label">Identity (§6)</div>
+                    <div class="cert-row"><span class="cert-label">Agent UUID</span><span class="cert-value" style="font-size:0.78em">${c.agent_uuid || '—'}</span></div>
+                    <div class="cert-row"><span class="cert-label">Template Name</span><span class="cert-value">${agentId}</span></div>
+                    <div class="cert-row"><span class="cert-label">Org ID</span><span class="cert-value">${c.org_id || '—'}</span></div>
+                    <div class="cert-row"><span class="cert-label">Owner</span><span class="cert-value">${c.owner || '—'}</span></div>
+                    <div class="cert-row"><span class="cert-label">Issuer (CA)</span><span class="cert-value">${c.issuer || '—'}</span></div>
+                    <div class="cert-row"><span class="cert-label">Template Version</span><span class="cert-value">${c.template_version || '—'}</span></div>
+                    <div class="cert-row"><span class="cert-label">Expires</span><span class="cert-value">${expires}</span></div>
+                    <div class="cert-section-label">Authorization Bounds (§7, §8)</div>
+                    <div class="cert-row"><span class="cert-label">Allowed Scopes</span><span class="cert-value scope">${(c.allowed_scopes || []).join(', ')}</span></div>
+                    <div class="cert-row"><span class="cert-label">Can Spawn Templates</span><span class="${canSpawn ? 'cert-value spawn' : 'cert-value none'}">${canSpawn || '— none permitted —'}</span></div>
+                    <div class="cert-row"><span class="cert-label">Max Concurrent Children</span><span class="cert-value">${c.max_children ?? 0}</span></div>
+                    <div class="cert-row"><span class="cert-label">Scope Inheritance</span><span class="cert-value">strict-subset (child ⊆ parent)</span></div>
+                    <div class="cert-section-label">Policy (§9)</div>
+                    <div class="cert-row"><span class="cert-label">Policy Reference</span><span class="cert-value policy">${c.policy_ref || '—'}</span></div>
+                    <div class="cert-row"><span class="cert-label">Time-to-Live</span><span class="cert-value">${c.ttl_seconds || 86400}s (24 hr)</span></div>
+                </div>`;
+            grid.appendChild(card);
+        }
+    } catch (e) {
+        console.error('Failed to load certs:', e);
+    }
+}
+
 async function loadRecentAudit() {
     const btn = document.getElementById('load-audit-btn');
     btn.textContent = '⏳ Loading...';
@@ -233,29 +291,27 @@ async function loadRecentAudit() {
             return;
         }
 
-        // Merge CW entries into auditLog (newest first from CW, oldest first in auditLog)
+        // CW Insights returns fields directly (no @message wrapper)
+        // Merge newest-first from CW into auditLog (oldest first)
         data.entries.slice().reverse().forEach(cw => {
             try {
-                const msg = JSON.parse(cw['@message'] || '{}');
                 const entry = {
-                    correlationId:  msg.correlationId || cw.correlationId || '—',
-                    spanId:         msg.spanId        || '—',
-                    scenario:       msg.scenario      || '—',
-                    name:           msg.name          || 'CW Entry',
-                    agent:          msg.agent         || cw.agent || '—',
-                    action:         msg.action        || cw.action || '—',
-                    decision:       msg.decision      || cw.decision || '—',
-                    reason:         msg.reason        || cw.reason || '—',
-                    timestamp:      cw['@timestamp']  || msg.timestamp || new Date().toISOString(),
-                    grantedScopes:  msg.grantedScopes || [],
-                    requestedScopes: msg.requestedScopes || [],
-                    prevEntryHash:  msg.prevEntryHash || '—',
-                    certStatus:     msg.certStatus    || '—',
-                    jwtValid:       msg.jwtValid      ?? null,
-                    hmacValid:      msg.hmacValid     ?? null,
+                    correlationId:   cw.correlationId  || '—',
+                    spanId:          cw.spanId         || '—',
+                    scenario:        cw.scenario       || '—',
+                    name:            cw.name           || 'CW Entry',
+                    agent:           cw.agent          || '—',
+                    action:          cw.action         || '—',
+                    decision:        cw.decision       || '—',
+                    reason:          cw.reason         || '—',
+                    timestamp:       cw['@timestamp']  || new Date().toISOString(),
+                    grantedScopes:   cw.grantedScopes  || [],
+                    requestedScopes: cw.requestedScopes|| [],
+                    prevEntryHash:   cw.prevEntryHash  || '—',
+                    certStatus:      cw.certStatus     || '—',
+                    stage:           cw.stage          || '—',
                 };
                 auditLog.push(entry);
-                // Drop oldest when over 10
                 if (auditLog.length > 10) auditLog.shift();
             } catch (_) {}
         });

@@ -31,6 +31,7 @@ class CertManager:
     def register_template(self, agent_id: str, scopes: list, can_spawn: list, ttl_seconds: int) -> bool:
         """
         Register agent template in Template Registry.
+        Section 7.1: can_spawn is whitelist of permitted child templates this agent may instantiate.
         State: ACTIVE (ready to use)
         """
         try:

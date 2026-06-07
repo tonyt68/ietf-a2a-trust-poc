@@ -10,10 +10,8 @@ services:
       - AWS_SECRETS_NAME=${AWS_SECRETS_NAME}
       - S3_BUCKET=${S3_BUCKET}
       - DYNAMODB_TABLE=${DYNAMODB_TABLE}
-      - GCP_PROJECT_ID=${GCP_PROJECT_ID}
       - CEDAR_POLICY_PATH=/app/policies
       - LOG_LEVEL=${LOG_LEVEL:-INFO}
-      - GOOGLE_APPLICATION_CREDENTIALS=/root/.config/gcloud/application_default_credentials.json
       - AWS_ACCESS_KEY_ID=${AWS_ACCESS_KEY_ID}
       - AWS_SECRET_ACCESS_KEY=${AWS_SECRET_ACCESS_KEY}
       - CERTS_DIR=/app/certs
@@ -21,8 +19,6 @@ services:
       - ./services/mcp_server:/app
       - ./policies:/app/policies
       - ./certs:/app/certs
-      - ~/.config/gcloud:/root/.config/gcloud:ro
-      - ~/.aws:/root/.aws:ro
     networks:
       - a2a_network
     depends_on:

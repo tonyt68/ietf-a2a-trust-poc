@@ -28,15 +28,29 @@ die() {
 # ── Step 1: Static tests (instant, no server) ─────────────────────────────
 echo ""
 echo "═══════════════════════════════════════════════════════════════"
-echo " Step 1/3: Static tests (IETF conformance + cert validation)"
+echo " Step 1/5: IETF Conformance Vectors (50 vectors)"
 echo "═══════════════════════════════════════════════════════════════"
 python3 tests/test_vectors.py || die "Static tests failed. Fix before starting services."
 echo -e "${GREEN}✓ Static tests passed${NC}"
 
+echo ""
+echo "═══════════════════════════════════════════════════════════════"
+echo " Step 1.5/5: Two-Phase Policy Signature Tests (Section 9.3)"
+echo "═══════════════════════════════════════════════════════════════"
+python3 tests/test_policy_signatures.py || die "Policy signature tests failed. Dual-sig validation broken."
+echo -e "${GREEN}✓ Policy signature tests passed${NC}"
+
+echo ""
+echo "═══════════════════════════════════════════════════════════════"
+echo " Step 1.6/5: Policy Field Guard Tests (Cert Identity Protection)"
+echo "═══════════════════════════════════════════════════════════════"
+python3 tests/test_policy_field_guard.py || die "Policy field guard tests failed. Cert protection broken."
+echo -e "${GREEN}✓ Policy field guard tests passed${NC}"
+
 # ── Step 2: Start services ────────────────────────────────────────────────
 echo ""
 echo "═══════════════════════════════════════════════════════════════"
-echo " Step 2/3: Starting services (docker compose down + up --build)"
+echo " Step 2/5: Starting services (docker compose down + up --build)"
 echo "═══════════════════════════════════════════════════════════════"
 docker compose down 2>&1 | tail -3
 docker compose up -d --build 2>&1 | tail -6
@@ -84,10 +98,18 @@ echo -e "${GREEN}✓ All services healthy${NC}"
 # ── Step 3: Smoke tests (live server) ────────────────────────────────────
 echo ""
 echo "═══════════════════════════════════════════════════════════════"
-echo " Step 3/3: Smoke tests (live server verification)"
+echo " Step 3/5: Smoke tests (live server verification)"
 echo "═══════════════════════════════════════════════════════════════"
 python3 tests/smoke_test.py || die "Smoke tests failed. Services stopped."
 echo -e "${GREEN}✓ Smoke tests passed${NC}"
+
+# ── Step 4: Red team security tests ──────────────────────────────────────
+echo ""
+echo "═══════════════════════════════════════════════════════════════"
+echo " Step 4/5: Red Team Security Tests (IETF §16 + OWASP Top 10)"
+echo "═══════════════════════════════════════════════════════════════"
+python3 tests/red_team_test.py || die "Red team tests failed. Security regression detected."
+echo -e "${GREEN}✓ Red team tests passed${NC}"
 
 # ── All good ──────────────────────────────────────────────────────────────
 echo ""
@@ -98,8 +120,4 @@ echo "  Demo UI:          http://localhost:8765"
 echo "  MCP Server:       http://localhost:8001"
 echo "  Admin Bootstrap:  http://localhost:8002"
 echo "  DynamoDB Local:   http://localhost:8000"
-echo ""
-echo "  Red team:         python3 tests/red_team_test.py"
-echo "  Conformance:      python3 tests/test_vectors.py"
-echo "  Smoke:            python3 tests/smoke_test.py"
 echo ""

@@ -64,6 +64,16 @@ class EventService:
                                  "stage": "input_validation"})
                 return (False, None, decision, reason)
 
+            # 0.1. EMPTY SCOPES — DENY (zero-trust: agent must declare intent, Section 16.1)
+            if not requested_scopes:
+                decision = "DENIED"
+                reason = "Empty scopes not permitted — agent must declare requested scopes (Section 16.1)"
+                self._log_audit({"correlationId": correlation_id, "spanId": span_id,
+                                 "agent": agent_id, "action": "write_event",
+                                 "decision": decision, "reason": reason,
+                                 "stage": "input_validation"})
+                return (False, None, decision, reason)
+
             # 1. CERTIFICATE VALIDATION (RFC 5280)
             cert_path = self.certs_dir / f"{agent_id}.crt"
             cert_valid, cert_reason = self.cert_validator.validate_cert(agent_id, str(cert_path))
