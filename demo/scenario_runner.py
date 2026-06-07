@@ -325,18 +325,48 @@ class ScenarioRunner:
 
     def scenario_7_revocation_lifecycle(self):
         """
-        Cert lifecycle: demonstrates ACTIVE → DISABLED → DELETED state transitions.
-        Expected: Shows successful write while ACTIVE, then DENIED after revocation.
+        Cert lifecycle: ACTIVE → DISABLED → DELETED state machine (Section 10.4).
+        Step 1: Write while ACTIVE       → ALLOWED
+        Step 2: Admin disables agent-b   → DISABLED
+        Step 3: Write while DISABLED     → DENIED
+        Step 4: Admin reactivates        → ACTIVE (restore for future scenarios)
+        Final decision: DENIED (demonstrating lifecycle enforcement)
         """
         agent_id = "agent-b"
-        prompt = ("Describe the three certificate lifecycle states (ACTIVE, DISABLED, DELETED) "
-                  "and what each means for agent authorization. Two sentences.")
-        claude_response = "Hardcoded response (Claude auth disabled)"  # Skip Claude call
+        admin_headers = {"x-admin-key": "demo-admin-key-12345",
+                         "Content-Type": "application/json"}
 
-        r = self._post(agent_id, ["write:events"], {"lifecycle_explanation": claude_response})
-        decision = "ALLOWED" if r.status_code == 200 else "DENIED"
-        self.log_to_audit(7, agent_id, "write_event", decision,
-                          "Cert lifecycle: ACTIVE=ALLOWED; DISABLED=no new spawns; DELETED=CRL+DENY (Section 10.4)")
+        # Step 1: Write while ACTIVE — should succeed
+        r1 = self._post(agent_id, ["write:events"], {"lifecycle_step": "ACTIVE"})
+        step1 = "ALLOWED" if r1.status_code == 200 else "DENIED"
+
+        # Step 2: Disable agent-b via admin API (ACTIVE → DISABLED)
+        import requests as _req
+        _req.put(
+            f"{self.admin_url}/template/{agent_id}/state",
+            json={"new_state": "DISABLED"},
+            headers=admin_headers,
+            timeout=5
+        )
+
+        # Step 3: Write while DISABLED — should be denied
+        r2 = self._post(agent_id, ["write:events"], {"lifecycle_step": "DISABLED"})
+        step2 = "ALLOWED" if r2.status_code == 200 else "DENIED"
+
+        # Step 4: Reactivate agent-b (restore for subsequent scenarios)
+        _req.put(
+            f"{self.admin_url}/template/{agent_id}/state",
+            json={"new_state": "ACTIVE"},
+            headers=admin_headers,
+            timeout=5
+        )
+
+        # Final decision reflects the DISABLED write (the point of the demo)
+        final_decision = step2
+        self.log_to_audit(
+            7, agent_id, "write_event", final_decision,
+            f"Lifecycle: ACTIVE→{step1} | DISABLED→{step2} | Reactivated ACTIVE (Section 10.4)"
+        )
 
     def scenario_8_crl_check_failure(self):
         """

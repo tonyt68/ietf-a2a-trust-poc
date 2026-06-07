@@ -82,12 +82,29 @@ class CertManager:
             return False
 
         try:
-            self.table.update_item(
-                Key={'template_id': agent_id},
-                UpdateExpression='SET #state = :state',
-                ExpressionAttributeNames={'#state': 'state'},
-                ExpressionAttributeValues={':state': new_state}
-            )
+            # Primary: update JSON cert metadata — MCP server cert_validator reads this
+            meta_file = self.certs_dir / f"{agent_id}.json"
+            if not meta_file.exists():
+                log.error("Cert metadata not found", extra={"agent": agent_id})
+                return False
+
+            with open(meta_file, 'r') as f:
+                meta = json.load(f)
+            meta['state'] = new_state
+            with open(meta_file, 'w') as f:
+                json.dump(meta, f, indent=2)
+
+            # Secondary: update DynamoDB (best-effort, non-blocking for demo)
+            try:
+                self.table.update_item(
+                    Key={'template_id': agent_id},
+                    UpdateExpression='SET #state = :state',
+                    ExpressionAttributeNames={'#state': 'state'},
+                    ExpressionAttributeValues={':state': new_state}
+                )
+            except Exception as ddb_err:
+                log.warning("DynamoDB state update failed (non-fatal)",
+                           extra={"agent": agent_id, "error": str(ddb_err)})
 
             log.info("Template state updated",
                     extra={"template": agent_id, "new_state": new_state})

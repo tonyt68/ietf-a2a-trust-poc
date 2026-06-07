@@ -114,6 +114,7 @@ class CertValidator:
           4. CA chain validates (NOT self-signed)
           5. Not expired
           6. Key size >= 2048 bits
+          7. Template state is ACTIVE (Section 10.4 — DISABLED/DELETED = DENY)
         Returns: (valid: bool, reason: str)
         """
         if not Path(cert_path).exists():
@@ -135,6 +136,21 @@ class CertValidator:
 
         if (info.get("key_bits") or 0) < 2048:
             return (False, f"RSA key too small: {info.get('key_bits')} bits (min 2048)")
+
+        # Check template state from metadata (Section 10.4)
+        meta_path = str(cert_path).replace(".crt", ".json")
+        if Path(meta_path).exists():
+            try:
+                import json as _json
+                with open(meta_path) as f:
+                    meta = _json.load(f)
+                state = meta.get("state", "ACTIVE")
+                if state != "ACTIVE":
+                    log.warning("Template not ACTIVE", extra={"agent": agent_id, "state": state})
+                    return (False, f"Template state is {state} — not authorized (Section 10.4)")
+            except Exception as e:
+                log.error("Failed to read template state", extra={"error": str(e)})
+                return (False, "Failed to read template state (fail-closed)")
 
         log.info("Certificate valid", extra={"agent": agent_id, "issuer": info["issuer_cn"]})
         return (True, "Certificate valid")

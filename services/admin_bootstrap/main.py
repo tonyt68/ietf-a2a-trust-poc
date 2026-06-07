@@ -78,7 +78,6 @@ class RegisterTemplateRequest(BaseModel):
 
 
 class UpdateStateRequest(BaseModel):
-    agent_id: str
     new_state: str
 
 

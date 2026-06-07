@@ -39,6 +39,7 @@ services:
       - CERTS_DIR=/app/certs
       - AWS_ACCESS_KEY_ID=${AWS_ACCESS_KEY_ID}
       - AWS_SECRET_ACCESS_KEY=${AWS_SECRET_ACCESS_KEY}
+      - ADMIN_API_KEY=${ADMIN_API_KEY:-demo-admin-key-12345}
     volumes:
       - ./services/admin_bootstrap:/app
       - ./certs:/app/certs
