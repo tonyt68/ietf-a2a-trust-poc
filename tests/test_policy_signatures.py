@@ -33,6 +33,8 @@ def make_policy_canonical(policy_doc: dict) -> str:
 VALID_POLICY_DOC = {
     "allowed_scopes": ["write:events"],  # can_spawn is IMMUTABLE — not in policy updates
     "ttl_seconds": 86400,
+    "owner": "ajtrujillo68@gmail.com",
+    "created_at": "2026-06-06T20:00:00Z",
     "description": "Test policy update",
     "updated_at": "2026-06-06T21:00:00Z",
 }

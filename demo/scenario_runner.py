@@ -201,6 +201,8 @@ class ScenarioRunner:
         policy_doc = {
             "allowed_scopes": ["write:events"],  # can_spawn is immutable — not in policy updates
             "ttl_seconds": 86400,
+            "owner": existing_cert.get("owner", "ajtrujillo68@gmail.com"),
+            "created_at": existing_cert.get("created_at", self.get_timestamp()),
             "description": f"Policy update: {claude_response}",
             "updated_at": self.get_timestamp(),
         }
@@ -247,15 +249,20 @@ class ScenarioRunner:
                   "the owner signature and no Policy Authority countersignature?")
         claude_response = "Hardcoded response (Claude auth disabled)"  # Skip Claude call
 
+        cert_path = self.certs_dir / "agent-b.json"
+        existing_cert = {}
+        if cert_path.exists():
+            with open(cert_path) as f:
+                existing_cert = json.load(f)
+
         policy_doc = {
             "allowed_scopes": ["write:events"],
             "ttl_seconds":    86400,
+            "owner": existing_cert.get("owner", "ajtrujillo68@gmail.com"),
+            "created_at": existing_cert.get("created_at", self.get_timestamp()),
             "description":    "Scenario 4: missing PA sig test",
             "updated_at":     self.get_timestamp(),
         }
-
-        cert_path = self.certs_dir / "agent-b.json"
-        existing_cert = {}
         if cert_path.exists():
             with open(cert_path) as f:
                 existing_cert = json.load(f)
@@ -283,14 +290,20 @@ class ScenarioRunner:
         prompt = "In one sentence: what does a tampered PA signature indicate in an A2A trust system?"
         claude_response = "Hardcoded response (Claude auth disabled)"  # Skip Claude call
 
+        cert_path = self.certs_dir / "agent-b.json"
+        existing_cert = {}
+        if cert_path.exists():
+            with open(cert_path) as f:
+                existing_cert = json.load(f)
+
         policy_doc = {
             "allowed_scopes": ["write:events"],
             "ttl_seconds":    86400,
+            "owner": existing_cert.get("owner", "ajtrujillo68@gmail.com"),
+            "created_at": existing_cert.get("created_at", self.get_timestamp()),
             "description":    "Scenario 5: tampered PA sig test",
             "updated_at":     self.get_timestamp(),
         }
-
-        cert_path = self.certs_dir / "agent-b.json"
         existing_cert = {}
         if cert_path.exists():
             with open(cert_path) as f:

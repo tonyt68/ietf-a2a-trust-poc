@@ -179,6 +179,13 @@ class PolicyValidator:
             log.warning("Policy field guard rejected update", extra={"reason": guard_reason})
             return (False, guard_reason)
 
+        # 2.5. Required-field validation — policy updates must include owner and created_at (Section 9.3)
+        required_fields = {"owner", "created_at"}
+        missing_fields = required_fields - set(policy_doc.keys())
+        if missing_fields:
+            log.warning("Policy update missing required fields", extra={"missing": list(missing_fields)})
+            return (False, f"Policy update missing required fields: {', '.join(sorted(missing_fields))} (Section 9.3)")
+
         # 3. Chain of custody — both signing authorities must be legitimate
         owner_chain_valid, owner_chain_reason = self.chain_validator.validate_policy_authority_chain(
             self.owner_cert_path, "Owner Authority"
