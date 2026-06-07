@@ -55,9 +55,7 @@ def get_settings():
 
         # Non-secret config (from .env)
         aws_region: str = os.getenv('AWS_REGION', 'us-east-1')
-        aws_dynamodb_endpoint: str = os.getenv('AWS_DYNAMODB_ENDPOINT', '')
         s3_bucket: str = os.getenv('S3_BUCKET', 'a2a-trust-poc-events')
-        dynamodb_table: str = os.getenv('DYNAMODB_TABLE', 'template_registry')
         cedar_policy_path: str = os.getenv('CEDAR_POLICY_PATH', './policies')
         log_level: str = os.getenv('LOG_LEVEL', 'INFO')
         mcp_port: int = int(os.getenv('MCP_PORT', 8001))

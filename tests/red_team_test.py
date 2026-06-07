@@ -471,7 +471,7 @@ def a27_exception_info_leak():
     if r.status_code >= 400:
         body = r.text
         leak_patterns = ["Traceback", "/app/", 'File "', "boto3", "sqlalchemy",
-                         "dynamo", "/Users/", "Exception in thread"]
+                         "/Users/", "Exception in thread"]
         for pattern in leak_patterns:
             if pattern in body:
                 return False, f"Info leak: '{pattern}' in response"

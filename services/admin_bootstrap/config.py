@@ -49,8 +49,6 @@ def get_settings():
 
         # Config
         aws_region: str = os.getenv('AWS_REGION', 'us-east-1')
-        aws_dynamodb_endpoint: str = os.getenv('AWS_DYNAMODB_ENDPOINT', '')
-        dynamodb_table: str = os.getenv('DYNAMODB_TABLE', 'template_registry')
         log_level: str = os.getenv('LOG_LEVEL', 'INFO')
         admin_port: int = int(os.getenv('ADMIN_PORT', 8002))
 

@@ -32,7 +32,7 @@ def get_event_service() -> EventService:
     hmac_verifier = HMACVerifier(settings.hmac_secret)
     cedar_evaluator = CedarPolicyEvaluator(settings.cedar_policy_path)
     s3_tools = S3Tools(settings.s3_bucket, settings.aws_region)
-    cert_manager = CertManager(settings.dynamodb_table, settings.aws_region, certs_dir=certs_dir)
+    cert_manager = CertManager(certs_dir=certs_dir)
 
     # IETF compliance validators
     cert_validator = CertValidator(ca_root_cert_path=f"{certs_dir}/ca-root.crt")

@@ -61,16 +61,7 @@ echo " Step 3/4: Starting services"
 echo "═══════════════════════════════════════════════════════════════"
 docker compose up -d 2>&1 | tail -6
 
-# Create DynamoDB table if it doesn't exist
 sleep 4
-aws dynamodb create-table \
-  --table-name template_registry \
-  --attribute-definitions AttributeName=template_id,AttributeType=S \
-  --key-schema AttributeName=template_id,KeyType=HASH \
-  --billing-mode PAY_PER_REQUEST \
-  --endpoint-url http://localhost:8000 \
-  --region us-east-1 2>&1 | grep -v ResourceInUseException || true
-
 echo ""
 echo "Waiting for services to be ready..."
 MAX_WAIT=30
