@@ -91,6 +91,8 @@ class CertManager:
             with open(meta_file, 'r') as f:
                 meta = json.load(f)
             meta['state'] = new_state
+
+            # Write updated metadata — read first so file is only truncated after successful parse
             with open(meta_file, 'w') as f:
                 json.dump(meta, f, indent=2)
 

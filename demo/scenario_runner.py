@@ -82,10 +82,11 @@ class ScenarioRunner:
         "max_children",  # Immutable — structural spawn bound
     }
 
-    # Policy fields the PA signature covers (mutable policy section)
+    # Policy fields the PA signature covers — MUST match policy_validator.py POLICY_FIELDS exactly
+    # can_spawn and max_children are IMMUTABLE (in IDENTITY_FIELDS) — never in policy updates
     POLICY_FIELDS = {
-        "allowed_scopes", "can_spawn", "max_children", "scope_inherit",
-        "policy_ref", "ttl_seconds", "updated_at", "description", "tags", "conditions",
+        "allowed_scopes", "scope_inherit", "policy_ref",
+        "ttl_seconds", "updated_at", "description", "tags", "conditions",
     }
 
     def create_dual_sig(self, policy_doc: dict, existing_cert: dict = None) -> tuple:
@@ -333,33 +334,42 @@ class ScenarioRunner:
         Final decision: DENIED (demonstrating lifecycle enforcement)
         """
         agent_id = "agent-b"
-        admin_headers = {"x-admin-key": "demo-admin-key-12345",
-                         "Content-Type": "application/json"}
+        admin_key = os.getenv("ADMIN_API_KEY", "demo-admin-key-12345")
+        admin_headers = {"x-admin-key": admin_key, "Content-Type": "application/json"}
+
+        import requests as _req
+
+        def _set_state(new_state: str) -> bool:
+            try:
+                resp = _req.put(
+                    f"{self.admin_url}/template/{agent_id}/state",
+                    json={"new_state": new_state},
+                    headers=admin_headers,
+                    timeout=5
+                )
+                if resp.status_code != 200:
+                    log.error(f"Admin state update failed: HTTP {resp.status_code} — {resp.text[:200]}")
+                    return False
+                return True
+            except Exception as e:
+                log.error(f"Admin state update exception: {e}")
+                return False
 
         # Step 1: Write while ACTIVE — should succeed
         r1 = self._post(agent_id, ["write:events"], {"lifecycle_step": "ACTIVE"})
         step1 = "ALLOWED" if r1.status_code == 200 else "DENIED"
 
         # Step 2: Disable agent-b via admin API (ACTIVE → DISABLED)
-        import requests as _req
-        _req.put(
-            f"{self.admin_url}/template/{agent_id}/state",
-            json={"new_state": "DISABLED"},
-            headers=admin_headers,
-            timeout=5
-        )
+        disabled_ok = _set_state("DISABLED")
+        if not disabled_ok:
+            log.warning("Scenario 7: DISABLE failed — lifecycle demo incomplete")
 
         # Step 3: Write while DISABLED — should be denied
         r2 = self._post(agent_id, ["write:events"], {"lifecycle_step": "DISABLED"})
         step2 = "ALLOWED" if r2.status_code == 200 else "DENIED"
 
         # Step 4: Reactivate agent-b (restore for subsequent scenarios)
-        _req.put(
-            f"{self.admin_url}/template/{agent_id}/state",
-            json={"new_state": "ACTIVE"},
-            headers=admin_headers,
-            timeout=5
-        )
+        _set_state("ACTIVE")
 
         # Final decision reflects the DISABLED write (the point of the demo)
         final_decision = step2

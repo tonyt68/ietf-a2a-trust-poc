@@ -58,30 +58,48 @@ class PolicyAuthority:
             return None
 
     def _verify(self, data: str, sig_b64: str, cert_path: Path) -> bool:
-        """Verify RSA-SHA256 signature using X.509 public key"""
+        """Verify RSA-SHA256 signature using X.509 public key (safe subprocess, no shell=True)"""
+        import base64
+        data_tmp = sig_tmp = pubkey_tmp = None
         try:
             with tempfile.NamedTemporaryFile(mode='w', suffix='.dat', delete=False) as f:
                 f.write(data)
                 data_tmp = f.name
-            with tempfile.NamedTemporaryFile(mode='w', suffix='.sig64', delete=False) as f:
-                f.write(sig_b64)
-                sig_tmp = f.name
+
+            sig_tmp = data_tmp + ".sig"
             try:
-                result = subprocess.run(
-                    f"openssl enc -d -base64 -A -in {sig_tmp} | "
-                    f"openssl dgst -sha256 "
-                    f"-verify <(openssl x509 -in {cert_path} -pubkey -noout) "
-                    f"-signature /dev/stdin {data_tmp}",
-                    shell=True, executable="/bin/bash",
-                    capture_output=True, text=True
+                sig_bytes = base64.b64decode(sig_b64)
+            except Exception as e:
+                log.warning("Invalid base64 in signature", extra={"error": str(e)})
+                return False
+            with open(sig_tmp, 'wb') as f:
+                f.write(sig_bytes)
+
+            pubkey_tmp = data_tmp + ".pub"
+            with open(pubkey_tmp, 'w') as pkf:
+                r = subprocess.run(
+                    ["openssl", "x509", "-in", str(cert_path), "-pubkey", "-noout"],
+                    stdout=pkf, capture_output=False, text=True, timeout=5
                 )
-                return "Verified OK" in result.stdout
-            finally:
-                os.unlink(data_tmp)
-                os.unlink(sig_tmp)
+            if r.returncode != 0:
+                return False
+
+            result = subprocess.run(
+                ["openssl", "dgst", "-sha256", "-verify", pubkey_tmp,
+                 "-signature", sig_tmp, data_tmp],
+                capture_output=True, text=True, timeout=5
+            )
+            return result.returncode == 0 and "Verified OK" in result.stdout
         except Exception as e:
             log.error("Verify failed", extra={"error": str(e)})
             return False
+        finally:
+            for f in [data_tmp, sig_tmp, pubkey_tmp]:
+                if f and os.path.exists(f):
+                    try:
+                        os.unlink(f)
+                    except OSError:
+                        pass
 
     # ── Content hash (Section 9.4 step 4) ────────────────────────────────────
 

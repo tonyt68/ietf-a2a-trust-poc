@@ -11,11 +11,43 @@ Verifies that Owner and PA certificates used for policy signatures are:
 import logging
 import subprocess
 import re
+import time
 from pathlib import Path
 from typing import Tuple, Optional
 from datetime import datetime, timezone
 
 log = logging.getLogger(__name__)
+
+# Simple in-process cache for cert validation results (TTL: 60s)
+# Keyed by (cert_path, mtime) — invalidates automatically when file changes
+_cert_cache: dict = {}
+_CACHE_TTL = 60  # seconds
+
+
+def _cache_get(cert_path: Path) -> Optional[Tuple[bool, str]]:
+    try:
+        mtime = cert_path.stat().st_mtime
+        key = (str(cert_path), mtime)
+        entry = _cert_cache.get(key)
+        if entry and (time.time() - entry["ts"]) < _CACHE_TTL:
+            return entry["result"]
+    except Exception:
+        pass
+    return None
+
+
+def _cache_set(cert_path: Path, result: Tuple[bool, str]) -> None:
+    try:
+        mtime = cert_path.stat().st_mtime
+        key = (str(cert_path), mtime)
+        _cert_cache[key] = {"result": result, "ts": time.time()}
+        # Evict old entries
+        if len(_cert_cache) > 20:
+            oldest = sorted(_cert_cache, key=lambda k: _cert_cache[k]["ts"])[:5]
+            for k in oldest:
+                _cert_cache.pop(k, None)
+    except Exception:
+        pass
 
 
 class PolicyAuthorityChainValidator:
@@ -120,6 +152,11 @@ class PolicyAuthorityChainValidator:
             return (True, "Failed to check revocation (fail-closed)")
 
     def validate_policy_authority_chain(self, cert_path: Path, authority_name: str) -> Tuple[bool, str]:
+        # Check cache first — certs change rarely, avoid 5 subprocess calls per request
+        cached = _cache_get(cert_path)
+        if cached is not None:
+            return cached
+
         """
         Comprehensive chain of custody validation for policy signing authority.
 
@@ -155,7 +192,9 @@ class PolicyAuthorityChainValidator:
                        extra={"reason": revocation_reason})
             return (False, f"{authority_name} {revocation_reason} (Section 12.1)")
 
-        # All checks passed
+        # All checks passed — cache result
+        result = (True, f"{authority_name} chain of custody valid (Section 9.3)")
+        _cache_set(cert_path, result)
         log.info(f"{authority_name} chain of custody verified",
                 extra={"cert": str(cert_path), "checks": "chain|expiry|revocation"})
-        return (True, f"{authority_name} chain of custody valid (Section 9.3)")
+        return result

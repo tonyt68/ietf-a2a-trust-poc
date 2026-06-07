@@ -129,6 +129,9 @@ async def get_certs():
 @app.get("/api/audit/recent")
 async def get_recent_audit():
     """Fetch last 10 audit entries from CloudWatch Logs (last 1 hour)."""
+    import asyncio
+    import time as _time
+
     try:
         cw = boto3.client(
             "logs",
@@ -137,22 +140,27 @@ async def get_recent_audit():
             aws_secret_access_key=os.getenv("AWS_SECRET_ACCESS_KEY"),
         )
         log_group = os.getenv("CLOUDWATCH_LOG_GROUP", "/a2a-trust-poc/audit")
+        loop = asyncio.get_event_loop()
 
-        resp = cw.start_query(
+        resp = await loop.run_in_executor(None, lambda: cw.start_query(
             logGroupName=log_group,
-            startTime=int(__import__("time").time()) - 3600,  # last 1 hour
-            endTime=int(__import__("time").time()),
+            startTime=int(_time.time()) - 3600,
+            endTime=int(_time.time()),
             queryString="fields @timestamp, correlationId, agent, action, decision, reason, stage | sort @timestamp desc | limit 10",
-        )
+        ))
         query_id = resp["queryId"]
 
-        # Poll until complete (max 10s)
-        import time
+        # Poll until complete (max 10s) — use asyncio.sleep to avoid blocking event loop
+        result = None
         for _ in range(20):
-            time.sleep(0.5)
-            result = cw.get_query_results(queryId=query_id)
+            await asyncio.sleep(0.5)
+            result = await loop.run_in_executor(None, lambda: cw.get_query_results(queryId=query_id))
             if result["status"] in ("Complete", "Failed", "Cancelled"):
                 break
+
+        if result is None or result["status"] != "Complete":
+            return {"status": "timeout", "entries": [], "count": 0,
+                    "message": "CloudWatch query did not complete in 10s — retry in a moment"}
 
         entries = []
         for row in result.get("results", []):
