@@ -82,11 +82,12 @@ class ScenarioRunner:
         "max_children",  # Immutable — structural spawn bound
     }
 
-    # Policy fields the PA signature covers — MUST match policy_validator.py POLICY_FIELDS exactly
+    # Policy fields the PA signature covers — MUST match PolicyFieldGuard.MODIFIABLE_POLICY_FIELDS
     # can_spawn and max_children are IMMUTABLE (in IDENTITY_FIELDS) — never in policy updates
     POLICY_FIELDS = {
         "allowed_scopes", "scope_inherit", "policy_ref",
-        "ttl_seconds", "updated_at", "description", "tags", "conditions",
+        "ttl_seconds", "owner", "created_at", "updated_at",
+        "description", "tags", "conditions",
     }
 
     def create_dual_sig(self, policy_doc: dict, existing_cert: dict = None) -> tuple:
@@ -369,7 +370,9 @@ class ScenarioRunner:
         step2 = "ALLOWED" if r2.status_code == 200 else "DENIED"
 
         # Step 4: Reactivate agent-b (restore for subsequent scenarios)
-        _set_state("ACTIVE")
+        reactivated = _set_state("ACTIVE")
+        if not reactivated:
+            log.error("Scenario 7: REACTIVATION of agent-b FAILED — subsequent scenarios may break!")
 
         # Final decision reflects the DISABLED write (the point of the demo)
         final_decision = step2

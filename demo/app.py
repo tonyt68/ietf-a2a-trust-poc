@@ -140,7 +140,7 @@ async def get_recent_audit():
             aws_secret_access_key=os.getenv("AWS_SECRET_ACCESS_KEY"),
         )
         log_group = os.getenv("CLOUDWATCH_LOG_GROUP", "/a2a-trust-poc/audit")
-        loop = asyncio.get_event_loop()
+        loop = asyncio.get_running_loop()
 
         resp = await loop.run_in_executor(None, lambda: cw.start_query(
             logGroupName=log_group,
@@ -158,7 +158,16 @@ async def get_recent_audit():
             if result["status"] in ("Complete", "Failed", "Cancelled"):
                 break
 
-        if result is None or result["status"] != "Complete":
+        if result is None:
+            return {"status": "timeout", "entries": [], "count": 0,
+                    "message": "CloudWatch query did not complete in 10s — retry in a moment"}
+        if result["status"] == "Failed":
+            return {"status": "error", "entries": [], "count": 0,
+                    "message": f"CloudWatch query failed — check log group name and permissions"}
+        if result["status"] == "Cancelled":
+            return {"status": "error", "entries": [], "count": 0,
+                    "message": "CloudWatch query was cancelled"}
+        if result["status"] != "Complete":
             return {"status": "timeout", "entries": [], "count": 0,
                     "message": "CloudWatch query did not complete in 10s — retry in a moment"}
 

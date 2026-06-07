@@ -24,10 +24,21 @@ _cert_cache: dict = {}
 _CACHE_TTL = 60  # seconds
 
 
-def _cache_get(cert_path: Path) -> Optional[Tuple[bool, str]]:
+def _cache_key(cert_path: Path, crl_path: Path) -> Optional[tuple]:
+    """Cache key includes both cert mtime and CRL mtime — CRL update invalidates cache."""
     try:
-        mtime = cert_path.stat().st_mtime
-        key = (str(cert_path), mtime)
+        cert_mtime = cert_path.stat().st_mtime
+        crl_mtime = crl_path.stat().st_mtime if crl_path.exists() else 0
+        return (str(cert_path), cert_mtime, crl_mtime)
+    except Exception:
+        return None
+
+
+def _cache_get(cert_path: Path, crl_path: Path) -> Optional[Tuple[bool, str]]:
+    key = _cache_key(cert_path, crl_path)
+    if key is None:
+        return None
+    try:
         entry = _cert_cache.get(key)
         if entry and (time.time() - entry["ts"]) < _CACHE_TTL:
             return entry["result"]
@@ -36,12 +47,12 @@ def _cache_get(cert_path: Path) -> Optional[Tuple[bool, str]]:
     return None
 
 
-def _cache_set(cert_path: Path, result: Tuple[bool, str]) -> None:
+def _cache_set(cert_path: Path, crl_path: Path, result: Tuple[bool, str]) -> None:
+    key = _cache_key(cert_path, crl_path)
+    if key is None:
+        return
     try:
-        mtime = cert_path.stat().st_mtime
-        key = (str(cert_path), mtime)
         _cert_cache[key] = {"result": result, "ts": time.time()}
-        # Evict old entries
         if len(_cert_cache) > 20:
             oldest = sorted(_cert_cache, key=lambda k: _cert_cache[k]["ts"])[:5]
             for k in oldest:
@@ -132,8 +143,8 @@ class PolicyAuthorityChainValidator:
         try:
             import json
             if not self.revocation_list_path.exists():
-                log.warning("Revocation list not found — skipping CRL check")
-                return (False, "Revocation list not found (fail-closed)")
+                log.error("Revocation list not found — treating cert as REVOKED (fail-closed)")
+                return (True, "Revocation list not found (fail-closed)")
 
             with open(self.revocation_list_path, 'r') as f:
                 crl = json.load(f)
@@ -152,21 +163,16 @@ class PolicyAuthorityChainValidator:
             return (True, "Failed to check revocation (fail-closed)")
 
     def validate_policy_authority_chain(self, cert_path: Path, authority_name: str) -> Tuple[bool, str]:
+        """
+        Comprehensive chain of custody validation for policy signing authority.
+        Checks: file exists, CA-signed, not expired, not revoked.
+        Cache key includes both cert mtime and CRL mtime — CRL updates invalidate cache.
+        """
         # Check cache first — certs change rarely, avoid 5 subprocess calls per request
-        cached = _cache_get(cert_path)
+        cached = _cache_get(cert_path, self.revocation_list_path)
         if cached is not None:
             return cached
 
-        """
-        Comprehensive chain of custody validation for policy signing authority.
-
-        Args:
-            cert_path: Path to the authority certificate
-            authority_name: "Owner" or "Policy Authority"
-
-        Returns:
-            (valid: bool, reason: str)
-        """
         # 1. Check file exists
         if not cert_path.exists():
             return (False, f"{authority_name} certificate not found: {cert_path} (fail-closed)")
@@ -192,9 +198,9 @@ class PolicyAuthorityChainValidator:
                        extra={"reason": revocation_reason})
             return (False, f"{authority_name} {revocation_reason} (Section 12.1)")
 
-        # All checks passed — cache result
+        # All checks passed — cache result (keyed on cert + CRL mtime)
         result = (True, f"{authority_name} chain of custody valid (Section 9.3)")
-        _cache_set(cert_path, result)
+        _cache_set(cert_path, self.revocation_list_path, result)
         log.info(f"{authority_name} chain of custody verified",
                 extra={"cert": str(cert_path), "checks": "chain|expiry|revocation"})
         return result
