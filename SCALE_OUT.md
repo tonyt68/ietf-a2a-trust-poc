@@ -223,14 +223,28 @@ if not redis.set(f"nonce:{nonce}", "1", nx=True, ex=300):
 
 ### 4.4 Audit Chain (Tamper-Evident Log)
 
-| PoC | Production |
-|---|---|
-| File-based SHA-256 hash chain | AWS CloudTrail + CloudWatch Logs (immutable) |
-| Single file, local disk | Replicated, append-only, deletion-protected |
-| Verified on-demand | CloudTrail integrity validation built-in |
+| Layer | PoC | Production | Retention |
+|---|---|---|---|
+| **Immutable record** | `certs/audit_chain.json` (SHA-256 hash chain) | **S3 Object Lock (COMPLIANCE mode)** | 7 years (configurable) |
+| **Operational query** | Not available | CloudWatch Logs | 30 days (CW default) |
+| **Meta-audit** | Not available | AWS CloudTrail | 90 days |
 
-**Cross-org audit (§11.5):** Each org maintains independent audit in its own
-CloudWatch log group. Neither party can modify the other's audit trail.
+**Why two layers:**
+- **CloudWatch (30 days)** — Search, filter, correlate by `correlationId`. Feeds dashboards and alerts. Not WORM — retention window only. Operators use this daily.
+- **S3 Object Lock COMPLIANCE** — Legal-grade immutable record. Nobody can delete — not even root, not AWS support. KMS-signed per §16.6. This is the authoritative audit store for compliance, forensics, and cross-org disputes.
+- **CloudTrail** — Audits who accessed the audit records (meta-audit). Closes the accountability loop.
+
+```
+Decision made → MCP Server
+  │
+  ├─▶ CloudWatch Logs (30-day window, Insights queryable)
+  │
+  └─▶ S3 Object Lock COMPLIANCE (7-year WORM, KMS-signed)
+        └─▶ CloudTrail (who accessed audit records)
+```
+
+**Cross-org audit (§11.5):** Each org maintains independent S3 bucket + CloudWatch log group.
+Neither party can modify the other's audit trail. S3 bucket policy denies cross-account deletes.
 
 ### 4.5 Policy Store
 
@@ -501,7 +515,7 @@ These are documented scope limitations, not protocol deficiencies.
 | Limitation | Production Solution | Protocol Impact |
 |---|---|---|
 | File-based nonce tracker | Redis `SET NX EX` | None — protocol is store-agnostic |
-| File-based audit chain | CloudWatch + CloudTrail | None — protocol requires tamper-evidence, not a specific store |
+| File-based audit chain | S3 Object Lock COMPLIANCE (7-year WORM) + CloudWatch 30-day query window | None — protocol requires tamper-evidence, not a specific store |
 | Self-signed CA root | AWS Private CA / Vault | None — protocol is CA-agnostic |
 | Single-region | DynamoDB Global Tables | None — protocol is topology-agnostic |
 | No OCSP | OCSP stapling via CA | Enhancement only |
