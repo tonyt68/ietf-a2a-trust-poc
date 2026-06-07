@@ -97,6 +97,7 @@ async def run_scenario(scenario: dict):
                 "correlationId": correlation_id,
                 "decision": entry["decision"],
                 "reason": entry["reason"],
+                "agent": entry.get("agent_id", entry.get("agent", "")),
                 "timestamp": entry["timestamp"]
             }
 

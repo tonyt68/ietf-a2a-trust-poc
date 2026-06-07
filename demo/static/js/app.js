@@ -39,9 +39,16 @@ async function computeHash(data) {
     return hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
 }
 
+// Which agent each scenario uses
+const SCENARIO_AGENTS = {
+    1: 'agent-b', 2: 'agent-b', 3: 'agent-a', 4: 'agent-b',
+    5: 'agent-b', 6: 'agent-a', 7: 'agent-b', 8: 'agent-x-revoked',
+    9: 'agent-b', 10: 'agent-b', 11: 'agent-b'
+};
+
 async function runScenario(scenarioId) {
     const scenario = SCENARIOS[scenarioId];
-    const agentId = scenarioId % 2 === 0 ? 'agent-b' : 'agent-a';
+    const agentId = SCENARIO_AGENTS[scenarioId] || 'agent-b';
     const parentSpanId = auditLog.length > 0 ? auditLog[auditLog.length - 1].spanId : null;
 
     try {
@@ -64,9 +71,10 @@ async function runScenario(scenarioId) {
             prevEntryHash = await computeHash(auditLog[auditLog.length - 1]);
         }
 
-        // Use ACTUAL decision from server — never the hardcoded expected value
+        // Use ACTUAL values from server — never hardcoded expected values
         const actualDecision = result.decision || scenario.decision;
         const actualReason   = result.reason   || scenario.reason;
+        const actualAgent    = result.agent    || agentId;
 
         // Update card border to reflect actual runtime result
         const card = document.querySelector(`[data-scenario="${scenarioId}"]`);
@@ -81,7 +89,7 @@ async function runScenario(scenarioId) {
             parentSpanId:    parentSpanId,
             scenario:        scenarioId,
             name:            scenario.name,
-            agent:           agentId,
+            agent:           actualAgent,
             action:          'write_event',
             decision:        actualDecision,
             reason:          actualReason,
