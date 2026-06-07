@@ -21,8 +21,13 @@ class CertManager:
 
     def __init__(self, table_name: str, region: str, certs_dir: str = "./certs"):
         self.table_name = table_name
-        self.dynamodb = boto3.resource('dynamodb', region_name=region)
-        self.table = self.dynamodb.Table(table_name)
+        self.table = None
+        try:
+            self.dynamodb = boto3.resource('dynamodb', region_name=region)
+            self.table = self.dynamodb.Table(table_name)
+        except Exception as e:
+            log.warning("DynamoDB unavailable (PoC uses filesystem exclusively)",
+                       extra={"error": str(e)})
         self.certs_dir = Path(certs_dir)
         self.certs_dir.mkdir(parents=True, exist_ok=True)
         self.crl_file = self.certs_dir / "revocation_list.json"
@@ -97,16 +102,17 @@ class CertManager:
                 json.dump(meta, f, indent=2)
 
             # Secondary: update DynamoDB (best-effort, non-blocking for demo)
-            try:
-                self.table.update_item(
-                    Key={'template_id': agent_id},
-                    UpdateExpression='SET #state = :state',
-                    ExpressionAttributeNames={'#state': 'state'},
-                    ExpressionAttributeValues={':state': new_state}
-                )
-            except Exception as ddb_err:
-                log.warning("DynamoDB state update failed (non-fatal)",
-                           extra={"agent": agent_id, "error": str(ddb_err)})
+            if self.table:
+                try:
+                    self.table.update_item(
+                        Key={'template_id': agent_id},
+                        UpdateExpression='SET #state = :state',
+                        ExpressionAttributeNames={'#state': 'state'},
+                        ExpressionAttributeValues={':state': new_state}
+                    )
+                except Exception as ddb_err:
+                    log.warning("DynamoDB state update failed (non-fatal)",
+                               extra={"agent": agent_id, "error": str(ddb_err)})
 
             log.info("Template state updated",
                     extra={"template": agent_id, "new_state": new_state})

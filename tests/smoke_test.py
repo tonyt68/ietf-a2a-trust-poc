@@ -13,11 +13,10 @@ Checks:
   3. MCP Server health + endpoint reachability
   4. Admin Bootstrap health
   5. Demo Web health
-  6. DynamoDB Local reachability
-  7. S3 bucket reachable (via AWS creds)
-  8. Cedar policy files loaded
-  9. Anthropic API key valid (quick model list)
-  10. End-to-end write-event smoke (agent-b → write:events)
+  6. S3 bucket reachable (via AWS creds)
+  7. Cedar policy files loaded
+  8. Anthropic API key valid (quick model list)
+  9. End-to-end write-event smoke (agent-b → write:events)
 """
 
 import json
@@ -135,10 +134,9 @@ if env_file.exists():
 
 required_env = [
     ("ANTHROPIC_API_KEY",  "Claude API calls in demo scenarios"),
-    ("AWS_ACCESS_KEY_ID",  "S3 + DynamoDB access"),
-    ("AWS_SECRET_ACCESS_KEY", "S3 + DynamoDB access"),
+    ("AWS_ACCESS_KEY_ID",  "S3 access"),
+    ("AWS_SECRET_ACCESS_KEY", "S3 access"),
     ("S3_BUCKET",          "Event storage"),
-    ("DYNAMODB_TABLE",     "Template Registry"),
     ("AWS_REGION",         "AWS region"),
 ]
 
@@ -182,40 +180,8 @@ mcp_up   = health_check("MCP Server",       f"{MCP_URL}/health")
 admin_up = health_check("Admin Bootstrap",  f"{ADMIN_URL}/health")
 demo_up  = health_check("Demo Web",         f"{DEMO_URL}/health")
 
-# ── 5. DynamoDB Local ─────────────────────────────────────────────────────────
-print(f"\n{YELLOW}── 5. DynamoDB Local ──────────────────────────────────────────────────{RESET}")
-
-try:
-    import boto3
-    from botocore.config import Config
-
-    dynamodb = boto3.client(
-        "dynamodb",
-        region_name=os.getenv("AWS_REGION", "us-east-1"),
-        endpoint_url="http://localhost:8000",
-        aws_access_key_id=os.getenv("AWS_ACCESS_KEY_ID", "test"),
-        aws_secret_access_key=os.getenv("AWS_SECRET_ACCESS_KEY", "test"),
-        config=Config(connect_timeout=2, read_timeout=2)
-    )
-    tables = dynamodb.list_tables()["TableNames"]
-    expected_table = os.getenv("DYNAMODB_TABLE", "")
-
-    ok(f"DynamoDB Local reachable", f"{len(tables)} table(s)")
-
-    if expected_table and expected_table in tables:
-        ok(f"DynamoDB table '{expected_table}' exists")
-    elif expected_table:
-        fail(f"DynamoDB table '{expected_table}' NOT found", f"Tables: {tables}")
-    else:
-        warn("DYNAMODB_TABLE not set — skipping table check")
-
-except ImportError:
-    warn("boto3 not installed locally — skipping DynamoDB check")
-except Exception as e:
-    fail("DynamoDB Local unreachable", str(e)[:80])
-
-# ── 6. S3 Bucket ─────────────────────────────────────────────────────────────
-print(f"\n{YELLOW}── 6. S3 Bucket ───────────────────────────────────────────────────────{RESET}")
+# ── 5. S3 Bucket ─────────────────────────────────────────────────────────────
+print(f"\n{YELLOW}── 5. S3 Bucket ───────────────────────────────────────────────────────{RESET}")
 
 try:
     import boto3
@@ -237,8 +203,8 @@ except ImportError:
 except Exception as e:
     fail(f"S3 bucket check failed", str(e)[:80])
 
-# ── 7. Anthropic API Key ─────────────────────────────────────────────────────
-print(f"\n{YELLOW}── 7. Anthropic API Key ───────────────────────────────────────────────{RESET}")
+# ── 6. Anthropic API Key ─────────────────────────────────────────────────────
+print(f"\n{YELLOW}── 6. Anthropic API Key ───────────────────────────────────────────────{RESET}")
 
 # Read directly from .env (not os.environ) to avoid stale shell env overriding setdefault
 api_key = ""
@@ -273,8 +239,8 @@ if api_key:
 else:
     fail("ANTHROPIC_API_KEY not set", "Required for all 11 demo scenarios")
 
-# ── 8. End-to-End Smoke: write-event ─────────────────────────────────────────
-print(f"\n{YELLOW}── 8. End-to-End Smoke (write-event) ─────────────────────────────────{RESET}")
+# ── 7. End-to-End Smoke: write-event ─────────────────────────────────────────
+print(f"\n{YELLOW}── 7. End-to-End Smoke (write-event) ─────────────────────────────────{RESET}")
 
 if mcp_up:
     try:

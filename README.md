@@ -33,14 +33,14 @@ Each of the 11 demo scenarios maps directly to a requirement in the IETF draft:
 ### Prerequisites
 - Docker + Docker Compose
 - Python 3.12+
-- AWS credentials (S3 + DynamoDB)
+- AWS credentials (S3)
 - Anthropic API key
 
 ### 1. Configure
 
 ```bash
 cp .env.example .env
-# Edit .env: ANTHROPIC_API_KEY, AWS credentials, S3_BUCKET, DYNAMODB_TABLE
+# Edit .env: ANTHROPIC_API_KEY, AWS credentials, S3_BUCKET
 ```
 
 ### 2. Generate Certificates
@@ -83,7 +83,6 @@ python3 tests/red_team_test.py
 | `mcp_server` | 8001 | Authorization enforcement — 8-stage IETF validation chain |
 | `admin_bootstrap` | 8002 | Template Registry CA, policy authority, cert lifecycle |
 | `demo_web` | 8765 | 11 demo scenarios with real Claude Sonnet API calls |
-| `dynamodb_local` | 8000 | Template Registry (local DynamoDB) |
 
 ---
 
@@ -159,9 +158,9 @@ python3 tests/red_team_test.py               # 34/34 (scope escalation, replay, 
 ┌─────────────────────────────────────────────────────┐
 │                Docker Compose (local)               │
 │                                                     │
-│  demo_web ──▶ mcp_server ──▶ DynamoDB Local        │
-│  (Claude)     (8-stage       (Template Registry)   │
-│               validation)                          │
+│  demo_web ──▶ mcp_server                            │
+│  (Claude)     (8-stage                              │
+│               validation)                           │
 │                   │                                 │
 │          admin_bootstrap                            │
 │          (CA · Policy Authority · CRL)              │

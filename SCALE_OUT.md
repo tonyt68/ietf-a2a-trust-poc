@@ -24,12 +24,12 @@ It addresses three questions IETF reviewers ask of any draft seeking Standards T
 
 The PoC implements `draft-tonyai-a2a-trust-00` in full across four Docker services:
 
-| Service | Role | IETF Section |
-|---|---|---|
-| `mcp_server` | Authorization enforcement, CRL checks, audit chain | §6, §8, §12, §13 |
-| `admin_bootstrap` | Template Registry CA, policy authority, cert lifecycle | §6.1, §9, §10 |
-| `demo_web` | 11 scenario runner with real Claude API calls | §14.5 |
-| `dynamodb_local` | Template Registry store (local, replaces prod DynamoDB) | §3 (term), §6.1 (used) |
+| Service | Role | Data Store | IETF Section |
+|---|---|---|---|
+| `mcp_server` | Authorization enforcement, CRL checks, audit chain | Reads from filesystem (certs/) | §6, §8, §12, §13 |
+| `admin_bootstrap` | Template Registry CA, policy authority, cert lifecycle | Writes to filesystem + DynamoDB | §6.1, §9, §10 |
+| `demo_web` | 11 scenario runner with real Claude API calls | No state store | §14.5 |
+| `dynamodb_local` | **Write-only** — for prod architecture demo | Not read by MCP server in PoC | §7.1 (Template Registry) |
 
 ### 2.1 Conformance Certification
 
@@ -78,26 +78,32 @@ Checks: certs, env vars, Cedar policies, service health,
 │                     Docker Compose (local)                  │
 │                                                             │
 │  ┌──────────────┐    ┌──────────────┐    ┌──────────────┐  │
-│  │  demo_web    │───▶│  mcp_server  │───▶│  DynamoDB    │  │
+│  │  demo_web    │───▶│  mcp_server  │    │  DynamoDB    │  │
 │  │  :8765       │    │  :8001       │    │  Local :8000 │  │
-│  │              │    │              │    └──────────────┘  │
-│  │  Scenario    │    │  Cedar       │                       │
-│  │  Runner      │    │  Policies    │    ┌──────────────┐  │
-│  │  (Claude)    │    │  Cert Validator    │  AWS S3      │  │
-│  └──────────────┘    │  Replay Prev │    │  (real)      │  │
-│                      │  Audit Chain │───▶│              │  │
-│  ┌──────────────┐    └──────────────┘    └──────────────┘  │
-│  │admin_        │                                           │
-│  │bootstrap     │    certs/ (mounted volume)               │
-│  │:8002         │    ├── ca-root.{crt,key}                 │
-│  │              │    ├── owner.{crt,key}                   │
-│  │PolicyAuthority    ├── pa.{crt,key}                      │
-│  │CertManager   │    ├── agent-{a,b}.{crt,key,json}        │
-│  └──────────────┘    ├── revocation_list.json              │
-│                      ├── nonce_tracker.json                │
-│                      ├── audit_chain.json                  │
+│  │              │    │              │    │  (write-only)│  │
+│  │  Scenario    │    │  Cert Valid  │◀───│  not read    │  │
+│  │  Runner      │    │  (reads JSON)│    └──────────────┘  │
+│  │  (Claude)    │    │  Cedar Eval  │                       │
+│  └──────────────┘    │  Replay Prev │    ┌──────────────┐  │
+│       │              │  Audit Chain │───▶│  AWS S3      │  │
+│       └──────────────▶└──────────────┘    │  (real)      │  │
+│                           │               └──────────────┘  │
+│  ┌──────────────┐         │ (reads/writes JSON)            │
+│  │admin_        │◀────────┘ certs/ (mounted volume)        │
+│  │bootstrap     │    ├── ca-root.{crt,key}                │
+│  │:8002         │    ├── owner.{crt,key}                  │
+│  │              │    ├── pa.{crt,key}                     │
+│  │  CertManager │────├── agent-{a,b}.{crt,key,json}  ◀────┴─(reads state)
+│  │  (writes     │    ├── revocation_list.json             │
+│  │   JSON+DB)   │    ├── nonce_tracker.json               │
+│  └──────────────┘    ├── audit_chain.json                 │
 │                      └── cross_org_grants.json             │
 └─────────────────────────────────────────────────────────────┘
+
+KEY: PoC uses FILESYSTEM as source of truth
+     └─ agent-{a,b}.json is read by cert_validator
+     └─ DynamoDB writes are "best-effort, non-blocking"
+     └─ if DynamoDB fails, PoC continues normally
 ```
 
 ---
@@ -120,17 +126,86 @@ None represent protocol design flaws — they are operational hardening steps.
 X.509 certificate chains per RFC 5280, not a specific CA implementation.
 Any RFC 5280-compliant CA works.
 
-### 4.2 Template Registry
+### 4.2 Template Registry and State Store
+
+#### PoC Implementation (Filesystem Primary)
+
+The PoC uses **filesystem as the source of truth** with DynamoDB as write-only secondary:
+
+| Component | Storage | Read Path | Write Path |
+|-----------|---------|-----------|-----------|
+| Agent metadata | `certs/agent-{a,b}.json` | ✓ Read on every request | Write then DynamoDB |
+| Certificate state | `certs/agent-{a,b}.json` | ✓ Read by cert_validator | Write then DynamoDB |
+| DynamoDB table | `template_registry` | ✗ Never read in PoC | Write-only (best-effort) |
+
+**Why filesystem in PoC:**
+- Eliminates DynamoDB dependency for local testing
+- Fast (~5ms filesystem I/O vs ~50ms network)
+- Works completely offline
+- Simplifies credential configuration
+
+**Why DynamoDB writes exist:**
+- Architecturally document the production path
+- Enable smoke tests to verify DynamoDB integration (write-only)
+- All writes are "best-effort, non-blocking" — if DynamoDB fails, PoC continues normally
+
+#### Production Implementation (DynamoDB Primary)
 
 | PoC | Production |
 |---|---|
-| DynamoDB Local (in-process) | Amazon DynamoDB (regional, multi-AZ) |
-| Single table `template_registry` | Same schema, add GSIs for org-based queries |
+| Filesystem primary, DynamoDB write-only | DynamoDB primary (all reads/writes) |
+| `certs/` local volume | DynamoDB replicated, multi-AZ, GSI indexes |
 | No TTL index | DynamoDB TTL on `expires_at` for auto-expiry |
 | No replication | DynamoDB Global Tables for multi-region |
+| Single host, no distributed consistency | Multiple MCP servers, strong consistency |
+
+**Production state flow (§10.4 lifecycle):**
+```
+Admin API: PUT /template/{agent_id}/state
+  ↓
+CertManager.update_state() writes to DynamoDB
+  ↓
+MCP Server: reads Template Registry from DynamoDB
+  ↓
+cert_validator checks: state == "ACTIVE" (block if DISABLED/DELETED)
+```
 
 **Scaling note:** The Template Registry is read-heavy, write-rare. DynamoDB on-demand
 handles this efficiently. A 10,000-agent deployment at 1,000 reads/second costs ~$15/month.
+
+#### Architectural Rationale: Why Filesystem in PoC?
+
+This is a deliberate trade-off for PoC simplicity:
+
+**PoC Constraints:**
+- Single docker-compose, one host
+- No distributed consistency issues
+- No need to coordinate reads across multiple servers
+- Local storage is always available
+
+**Production Requirement:**
+- Multiple MCP servers need authoritative shared state
+- Distributed consistency is mandatory (§7.1 state checks must agree)
+- Network latency acceptable (reads cached locally)
+- Durability + replication required
+
+**Migration path:**
+```
+PoC Phase 1 (current):
+  Filesystem primary → write to both → DynamoDB catch-up
+
+PoC Phase 2 (optional):
+  Add DynamoDB reads for multi-server testing
+  
+Production Phase 1:
+  Switch read path: filesystem → DynamoDB
+  All state reads from DynamoDB
+  All state writes to DynamoDB + S3 backup
+  
+Production Phase 2:
+  DynamoDB Global Tables for multi-region
+  Multi-region agents read local DynamoDB replica
+```
 
 ### 4.3 Nonce Tracker (Replay Prevention)
 
