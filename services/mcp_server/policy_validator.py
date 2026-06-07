@@ -50,6 +50,8 @@ POLICY_FIELDS = {
     "scope_inherit",    # Inheritance rules
     "policy_ref",       # Reference policy version
     "ttl_seconds",      # TTL override
+    "owner",            # Policy owner — MUST match PolicyFieldGuard.MODIFIABLE_POLICY_FIELDS
+    "created_at",       # Policy creation timestamp
     "updated_at",       # Policy update timestamp
     "description",      # Human-readable description
     "tags",             # Metadata tags
@@ -108,15 +110,18 @@ class PolicyValidator:
                 f.write(sig_bytes)
 
             pubkey_file = data_file + ".pub"
-            with open(pubkey_file, 'w') as pkf:
-                result = subprocess.run(
-                    ["openssl", "x509", "-in", str(cert_path), "-pubkey", "-noout"],
-                    stdout=pkf, capture_output=False, text=True, timeout=5
-                )
+            result = subprocess.run(
+                ["openssl", "x509", "-in", str(cert_path), "-pubkey", "-noout"],
+                capture_output=True, text=True, timeout=5
+            )
 
-            if result.returncode != 0:
-                log.warning("Failed to extract public key", extra={"cert": str(cert_path)})
+            if result.returncode != 0 or not result.stdout.strip():
+                log.warning("Failed to extract public key",
+                            extra={"cert": str(cert_path), "stderr": result.stderr[:200]})
                 return False
+
+            with open(pubkey_file, 'w') as pkf:
+                pkf.write(result.stdout)
 
             result = subprocess.run(
                 ["openssl", "dgst", "-sha256", "-verify", pubkey_file,

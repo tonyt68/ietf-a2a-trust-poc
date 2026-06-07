@@ -76,13 +76,16 @@ class PolicyAuthority:
                 f.write(sig_bytes)
 
             pubkey_tmp = data_tmp + ".pub"
-            with open(pubkey_tmp, 'w') as pkf:
-                r = subprocess.run(
-                    ["openssl", "x509", "-in", str(cert_path), "-pubkey", "-noout"],
-                    stdout=pkf, capture_output=False, text=True, timeout=5
-                )
-            if r.returncode != 0:
+            r = subprocess.run(
+                ["openssl", "x509", "-in", str(cert_path), "-pubkey", "-noout"],
+                capture_output=True, text=True, timeout=5
+            )
+            if r.returncode != 0 or not r.stdout.strip():
+                log.warning("Failed to extract public key",
+                            extra={"cert": str(cert_path), "stderr": r.stderr[:200]})
                 return False
+            with open(pubkey_tmp, 'w') as pkf:
+                pkf.write(r.stdout)
 
             result = subprocess.run(
                 ["openssl", "dgst", "-sha256", "-verify", pubkey_tmp,

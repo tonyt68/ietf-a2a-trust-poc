@@ -18,18 +18,26 @@ from datetime import datetime, timezone
 
 log = logging.getLogger(__name__)
 
-# Simple in-process cache for cert validation results (TTL: 60s)
-# Keyed by (cert_path, mtime) — invalidates automatically when file changes
+# In-process cache for cert validation results
+# Successful results: TTL 60s — certs change rarely
+# Failed results: TTL 5s — avoids subprocess storm on repeated bad certs, allows quick recovery
 _cert_cache: dict = {}
-_CACHE_TTL = 60  # seconds
+_CACHE_TTL_SUCCESS = 60  # seconds
+_CACHE_TTL_FAILURE = 5   # seconds
 
 
 def _cache_key(cert_path: Path, crl_path: Path) -> Optional[tuple]:
-    """Cache key includes both cert mtime and CRL mtime — CRL update invalidates cache."""
+    """Cache key includes cert mtime, CRL mtime AND CRL size — handles same-mtime restores."""
     try:
         cert_mtime = cert_path.stat().st_mtime
-        crl_mtime = crl_path.stat().st_mtime if crl_path.exists() else 0
-        return (str(cert_path), cert_mtime, crl_mtime)
+        if crl_path.exists():
+            crl_stat = crl_path.stat()
+            crl_mtime = crl_stat.st_mtime
+            crl_size = crl_stat.st_size
+        else:
+            crl_mtime = 0
+            crl_size = 0
+        return (str(cert_path), cert_mtime, crl_mtime, crl_size)
     except Exception:
         return None
 
@@ -40,8 +48,10 @@ def _cache_get(cert_path: Path, crl_path: Path) -> Optional[Tuple[bool, str]]:
         return None
     try:
         entry = _cert_cache.get(key)
-        if entry and (time.time() - entry["ts"]) < _CACHE_TTL:
-            return entry["result"]
+        if entry:
+            ttl = _CACHE_TTL_SUCCESS if entry["result"][0] else _CACHE_TTL_FAILURE
+            if (time.time() - entry["ts"]) < ttl:
+                return entry["result"]
     except Exception:
         pass
     return None
@@ -173,7 +183,11 @@ class PolicyAuthorityChainValidator:
         if cached is not None:
             return cached
 
-        # 1. Check file exists
+        def _cache_and_return(res: Tuple[bool, str]) -> Tuple[bool, str]:
+            _cache_set(cert_path, self.revocation_list_path, res)
+            return res
+
+        # 1. Check file exists (not cached — can't stat a missing file for key)
         if not cert_path.exists():
             return (False, f"{authority_name} certificate not found: {cert_path} (fail-closed)")
 
@@ -182,25 +196,24 @@ class PolicyAuthorityChainValidator:
         if not chain_valid:
             log.warning(f"{authority_name} chain validation failed",
                        extra={"reason": chain_reason})
-            return (False, chain_reason)
+            return _cache_and_return((False, chain_reason))
 
         # 3. Check certificate not expired
         expired, expiry_reason = self._is_cert_expired(cert_path)
         if expired:
             log.warning(f"{authority_name} certificate expired",
                        extra={"reason": expiry_reason})
-            return (False, f"{authority_name} {expiry_reason} (Section 12.3)")
+            return _cache_and_return((False, f"{authority_name} {expiry_reason} (Section 12.3)"))
 
         # 4. Check certificate not revoked
         revoked, revocation_reason = self._is_cert_revoked(cert_path)
         if revoked:
             log.warning(f"{authority_name} certificate revoked",
                        extra={"reason": revocation_reason})
-            return (False, f"{authority_name} {revocation_reason} (Section 12.1)")
+            return _cache_and_return((False, f"{authority_name} {revocation_reason} (Section 12.1)"))
 
-        # All checks passed — cache result (keyed on cert + CRL mtime)
+        # All checks passed
         result = (True, f"{authority_name} chain of custody valid (Section 9.3)")
-        _cache_set(cert_path, self.revocation_list_path, result)
         log.info(f"{authority_name} chain of custody verified",
                 extra={"cert": str(cert_path), "checks": "chain|expiry|revocation"})
-        return result
+        return _cache_and_return(result)
