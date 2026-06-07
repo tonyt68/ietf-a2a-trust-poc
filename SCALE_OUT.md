@@ -688,17 +688,3 @@ ietf-a2a-trust-poc/
 - Enables full end-to-end trace across both clouds from a single ID
 - Trade-off: if correlation ID is lost at any layer, traceability breaks — every layer MUST propagate it
 
----
-
-## Resume Keywords This PoC Adds
-- Cedar (Policy as Code)
-- Amazon Verified Permissions (scale-out path)
-- Google Cloud Logging
-- Vertex AI (GCP)
-- Terraform (multi-cloud IaC)
-- mTLS
-- JWT chain validation
-- HMAC-SHA256
-- Federated audit
-- IETF Internet-Draft reference implementation
-- HashiCorp Vault PKI (scale-out path)

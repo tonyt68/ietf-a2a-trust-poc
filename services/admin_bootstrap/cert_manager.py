@@ -5,6 +5,7 @@ Implements: Section 10 (Template Lifecycle), Section 12 (Revocation),
 """
 import json
 import logging
+import os
 from datetime import datetime, timezone
 from pathlib import Path
 
@@ -22,6 +23,13 @@ class CertManager:
         self.certs_dir.mkdir(parents=True, exist_ok=True)
         self.crl_file = self.certs_dir / "revocation_list.json"
         self.crl = self._load_crl()
+
+    def _atomic_write(self, path: Path, data: dict):
+        """Write JSON atomically via temp file + os.replace() — prevents corrupt state on crash."""
+        tmp = path.with_suffix(".tmp")
+        with open(tmp, 'w') as f:
+            json.dump(data, f, indent=2)
+        os.replace(tmp, path)
 
     def update_state(self, agent_id: str, new_state: str) -> bool:
         """
@@ -44,8 +52,7 @@ class CertManager:
                 meta = json.load(f)
             meta['state'] = new_state
 
-            with open(meta_file, 'w') as f:
-                json.dump(meta, f, indent=2)
+            self._atomic_write(meta_file, meta)
 
             log.info("Template state updated",
                     extra={"template": agent_id, "new_state": new_state})
@@ -59,21 +66,21 @@ class CertManager:
     # ===== Certificate Revocation List (CRL) =====
 
     def _load_crl(self) -> dict:
-        """Load Certificate Revocation List from disk"""
+        """Load CRL from disk. Returns None if file is corrupt — callers must treat None as DENY."""
         if self.crl_file.exists():
             try:
                 with open(self.crl_file, 'r') as f:
                     return json.load(f)
             except Exception as e:
-                log.error("Failed to load CRL", extra={"error": str(e)})
+                log.error("CRL corrupt or unreadable — failing closed", extra={"error": str(e)})
+                return None
         return {"revoked": [], "disabled": [], "disabled_at": {}, "last_updated": datetime.now(timezone.utc).isoformat()}
 
     def _save_crl(self):
-        """Persist CRL to disk"""
+        """Persist CRL atomically to disk."""
         try:
             self.crl["last_updated"] = datetime.now(timezone.utc).isoformat()
-            with open(self.crl_file, 'w') as f:
-                json.dump(self.crl, f, indent=2)
+            self._atomic_write(self.crl_file, self.crl)
         except Exception as e:
             log.error("Failed to save CRL", extra={"error": str(e)})
 
@@ -150,7 +157,11 @@ class CertManager:
         Section 12: all must be checked. Fail-closed: error = DENY.
         Section 12.3: TTL expiry MUST be fully automated.
         """
-        self.crl = self._load_crl()
+        crl = self._load_crl()
+        if crl is None:
+            log.error("CRL unreadable — failing closed", extra={"agent": agent_id})
+            return False
+        self.crl = crl
 
         if agent_id in self.crl.get("revoked", []):
             log.warning("CRL: agent REVOKED", extra={"agent": agent_id})
@@ -172,8 +183,9 @@ class CertManager:
                         expiry = expiry.replace(tzinfo=timezone.utc)
                     if datetime.now(timezone.utc) > expiry:
                         log.warning("CRL: agent TTL EXPIRED", extra={"agent": agent_id})
-                        self.crl.setdefault("revoked", []).append(agent_id)
-                        self._save_crl()
+                        if agent_id not in self.crl.get("revoked", []):
+                            self.crl.setdefault("revoked", []).append(agent_id)
+                            self._save_crl()
                         return False
             except Exception as e:
                 log.error("TTL check error (fail-closed)", extra={"agent": agent_id, "error": str(e)})

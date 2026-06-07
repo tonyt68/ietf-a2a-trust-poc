@@ -27,13 +27,6 @@ class GenerateCertRequest(BaseModel):
     agent_id: str
 
 
-class RegisterTemplateRequest(BaseModel):
-    agent_id: str
-    allowed_scopes: list
-    can_spawn: list
-    ttl_seconds: int = 3600
-
-
 class UpdateStateRequest(BaseModel):
     new_state: str
 
